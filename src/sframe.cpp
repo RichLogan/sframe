@@ -220,7 +220,7 @@ SFrame::KeyState&
 MLSContext::get_state(KeyID key_id)
 {
   const auto epoch_index = key_id & epoch_mask;
-  const auto sender_id = SenderID(key_id >> epoch_bits);
+  const auto sender_id = SenderID(size_t(key_id) >> epoch_bits);
 
   auto& epoch = epoch_cache.at(epoch_index);
   if (!epoch.has_value()) {
