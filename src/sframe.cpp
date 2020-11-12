@@ -171,7 +171,7 @@ MLSContext::MLSContext(CipherSuite suite_in, size_t epoch_bits_in)
 void
 MLSContext::add_epoch(EpochID epoch_id, const bytes& sframe_epoch_secret)
 {
-  auto epoch_index = epoch_id & epoch_mask;
+  auto epoch_index = size_t(epoch_id) & epoch_mask;
   epoch_cache.at(epoch_index).emplace(sframe_epoch_secret);
 }
 
@@ -219,7 +219,7 @@ MLSContext::EpochKeys::get(CipherSuite ciphersuite, SenderID sender_id)
 SFrame::KeyState&
 MLSContext::get_state(KeyID key_id)
 {
-  const auto epoch_index = EpochID(key_id & epoch_mask);
+  const auto epoch_index = key_id & epoch_mask;
   const auto sender_id = SenderID(key_id >> epoch_bits);
 
   auto& epoch = epoch_cache.at(epoch_index);
