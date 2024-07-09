@@ -1,7 +1,10 @@
 #include <sframe/sframe.h>
 
-#include "crypto.h"
+#include "provider.h"
 #include "header.h"
+#if defined(BUILTIN_PROVIDER)
+#include "openssl.h"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -23,23 +26,11 @@ operator<<(std::ostream& str, const input_bytes data)
 }
 
 ///
-/// Errors
-///
-
-unsupported_ciphersuite_error::unsupported_ciphersuite_error()
-  : std::runtime_error("Unsupported ciphersuite")
-{}
-
-authentication_error::authentication_error()
-  : std::runtime_error("AEAD authentication failure")
-{}
-
-///
 /// Context
 ///
 
-Context::Context(CipherSuite suite_in)
-  : SFrame(suite_in)
+Context::Context(CipherSuite suite_in, provider::ProviderPtr provider)
+  : SFrame(suite_in, std::move(provider))
 {}
 
 static const bytes sframe_label{
@@ -57,24 +48,24 @@ static const bytes sframe_enc_label{ 0x65, 0x6e, 0x63 };        // "enc"
 static const bytes sframe_auth_label{ 0x61, 0x75, 0x74, 0x68 }; // "auth"
 
 SFrame::KeyState
-SFrame::KeyState::from_base_key(CipherSuite suite, const bytes& base_key)
+SFrame::KeyState::from_base_key(CipherSuite suite, const bytes& base_key, const provider::Provider& provider)
 {
-  auto key_size = cipher_key_size(suite);
-  auto nonce_size = cipher_nonce_size(suite);
-  auto hash_size = cipher_digest_size(suite);
+  auto key_size = provider.cipher_key_size(suite);
+  auto nonce_size = provider.cipher_nonce_size(suite);
+  auto hash_size = provider.cipher_digest_size(suite);
 
-  auto secret = hkdf_extract(suite, sframe_label, base_key);
-  auto key = hkdf_expand(suite, secret, sframe_key_label, key_size);
-  auto salt = hkdf_expand(suite, secret, sframe_salt_label, nonce_size);
+  auto secret = provider.hkdf_extract(suite, sframe_label, base_key);
+  auto key = provider.hkdf_expand(suite, secret, sframe_key_label, key_size);
+  auto salt = provider.hkdf_expand(suite, secret, sframe_salt_label, nonce_size);
 
   // If using CTR+HMAC, set key = enc_key || auth_key
   if (suite == CipherSuite::AES_CM_128_HMAC_SHA256_4 ||
       suite == CipherSuite::AES_CM_128_HMAC_SHA256_8) {
-    secret = hkdf_extract(suite, sframe_ctr_label, key);
+    secret = provider.hkdf_extract(suite, sframe_ctr_label, key);
 
     auto main_key = key;
-    auto enc_key = hkdf_expand(suite, secret, sframe_enc_label, key_size);
-    auto auth_key = hkdf_expand(suite, secret, sframe_auth_label, hash_size);
+    auto enc_key = provider.hkdf_expand(suite, secret, sframe_enc_label, key_size);
+    auto auth_key = provider.hkdf_expand(suite, secret, sframe_auth_label, hash_size);
 
     key = enc_key;
     key.insert(key.end(), auth_key.begin(), auth_key.end());
@@ -86,7 +77,7 @@ SFrame::KeyState::from_base_key(CipherSuite suite, const bytes& base_key)
 void
 Context::add_key(KeyID key_id, const bytes& base_key)
 {
-  auto key_state = KeyState::from_base_key(suite, base_key);
+  auto key_state = KeyState::from_base_key(suite, base_key, *provider.get());
   state[key_id] = std::move(key_state);
 }
 
@@ -101,9 +92,29 @@ form_nonce(Counter ctr, const bytes& salt)
   return nonce;
 }
 
-SFrame::SFrame(CipherSuite suite_in)
+SFrame::SFrame(CipherSuite suite_in, provider::ProviderPtr provider)
   : suite(suite_in)
+{
+  if (provider == nullptr) {
+    #if defined(BUILTIN_PROVIDER)
+    // Maintaining backwards compatibility with the previous OpenSSL only implementation.
+    provider = std::unique_ptr<provider::openssl::OpenSSLProvider>(new provider::openssl::OpenSSLProvider());
+    #else
+    throw std::invalid_argument("Provider must not be null");
+    #endif
+  }
+  this->provider = std::move(provider);
+}
+
+SFrame::SFrame(SFrame&& other) noexcept
+  : suite(other.suite)
+  , provider(std::move(other.provider))
 {}
+
+SFrame& SFrame::operator=(SFrame&& other) noexcept {
+  provider = std::move(other.provider);
+  return *this;
+}
 
 SFrame::~SFrame() = default;
 
@@ -120,7 +131,7 @@ SFrame::_protect(KeyID key_id, output_bytes ciphertext, input_bytes plaintext)
 
   const auto nonce = form_nonce(ctr, state.salt);
   auto final_ciphertext =
-    seal(suite, state.key, nonce, inner_ciphertext, header, plaintext);
+    provider->seal(suite, state.key, nonce, inner_ciphertext, header, plaintext);
   return ciphertext.subspan(0, hdr_size + final_ciphertext.size());
 }
 
@@ -135,7 +146,7 @@ SFrame::_unprotect(output_bytes plaintext, input_bytes ciphertext)
 
   auto& state = get_state(header.key_id);
   const auto nonce = form_nonce(header.counter, state.salt);
-  return open(suite, state.key, nonce, plaintext, aad, inner_ciphertext);
+  return provider->open(suite, state.key, nonce, plaintext, aad, inner_ciphertext);
 }
 
 output_bytes
@@ -165,8 +176,8 @@ Context::get_state(KeyID key_id)
 /// MLSContext
 ///
 
-MLSContext::MLSContext(CipherSuite suite_in, size_t epoch_bits_in)
-  : SFrame(suite_in)
+MLSContext::MLSContext(CipherSuite suite_in, size_t epoch_bits_in, provider::ProviderPtr provider)
+  : SFrame(suite_in, std::move(provider))
   , epoch_bits(epoch_bits_in)
   , epoch_mask((size_t(1) << epoch_bits_in) - 1)
   , epoch_cache(size_t(1) << epoch_bits_in)
@@ -259,20 +270,20 @@ MLSContext::EpochKeys::EpochKeys(MLSContext::EpochID full_epoch_in,
 {}
 
 SFrame::KeyState&
-MLSContext::EpochKeys::get(CipherSuite ciphersuite, SenderID sender_id)
+MLSContext::EpochKeys::get(CipherSuite ciphersuite, SenderID sender_id, const provider::Provider& provider)
 {
   auto it = sender_keys.find(sender_id);
   if (it != sender_keys.end()) {
     return it->second;
   }
 
-  auto hash_size = cipher_digest_size(ciphersuite);
+  auto hash_size = provider.cipher_digest_size(ciphersuite);
   auto enc_sender_id = bytes(8);
   encode_uint(sender_id, enc_sender_id);
 
   auto sender_base_key =
-    hkdf_expand(ciphersuite, sframe_epoch_secret, enc_sender_id, hash_size);
-  auto key_state = KeyState::from_base_key(ciphersuite, sender_base_key);
+    provider.hkdf_expand(ciphersuite, sframe_epoch_secret, enc_sender_id, hash_size);
+  auto key_state = KeyState::from_base_key(ciphersuite, sender_base_key, provider);
   sender_keys.insert({ sender_id, std::move(key_state) });
 
   return sender_keys.at(sender_id);
@@ -291,7 +302,7 @@ MLSContext::get_state(KeyID key_id)
       ", sender_id:" + std::to_string(sender_id));
   }
 
-  return epoch->get(suite, sender_id);
+  return epoch->get(suite, sender_id, *this->provider.get());
 }
 
 } // namespace sframe

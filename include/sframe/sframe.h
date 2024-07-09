@@ -4,51 +4,15 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <provider.h>
 
 #include <gsl/gsl-lite.hpp>
 
 namespace sframe {
 
-struct openssl_error : std::runtime_error
-{
-  openssl_error();
-};
-
-struct unsupported_ciphersuite_error : std::runtime_error
-{
-  unsupported_ciphersuite_error();
-};
-
-struct authentication_error : std::runtime_error
-{
-  authentication_error();
-};
-
-struct buffer_too_small_error : std::runtime_error
-{
-  using parent = std::runtime_error;
-  using parent::parent;
-};
-
-struct invalid_parameter_error : std::runtime_error
-{
-  using parent = std::runtime_error;
-  using parent::parent;
-};
-
-enum class CipherSuite : uint16_t
-{
-  AES_CM_128_HMAC_SHA256_4 = 1,
-  AES_CM_128_HMAC_SHA256_8 = 2,
-  AES_GCM_128_SHA256 = 3,
-  AES_GCM_256_SHA512 = 4,
-};
+using CipherSuite = sframe::provider::CipherSuite;
 
 constexpr size_t max_overhead = 17 + 16;
-
-using bytes = std::vector<uint8_t>;
-using input_bytes = gsl::span<const uint8_t>;
-using output_bytes = gsl::span<uint8_t>;
 
 std::ostream&
 operator<<(std::ostream& str, const input_bytes data);
@@ -60,13 +24,25 @@ class SFrame
 {
 protected:
   CipherSuite suite;
+  provider::ProviderPtr provider;
 
-  SFrame(CipherSuite suite_in);
+  SFrame(CipherSuite suite_in,
+  #if defined(BUILTIN_PROVIDER)
+  provider::ProviderPtr provider = nullptr
+  #else
+  provider::ProviderPtr provider
+  #endif
+  );
+  SFrame(SFrame&& other) noexcept;
+  SFrame& operator=(SFrame&& other) noexcept;
+  SFrame(const SFrame&) = delete;
+  SFrame& operator=(const SFrame&) = delete;
+
   virtual ~SFrame();
 
   struct KeyState
   {
-    static KeyState from_base_key(CipherSuite suite, const bytes& base_key);
+    static KeyState from_base_key(CipherSuite suite, const bytes& base_key, const provider::Provider& provider);
 
     bytes key;
     bytes salt;
@@ -84,7 +60,7 @@ protected:
 class Context : public SFrame
 {
 public:
-  Context(CipherSuite suite);
+  Context(CipherSuite suite, provider::ProviderPtr provider = nullptr);
 
   void add_key(KeyID kid, const bytes& key);
 
@@ -106,7 +82,7 @@ public:
   using SenderID = uint64_t;
   using ContextID = uint64_t;
 
-  MLSContext(CipherSuite suite_in, size_t epoch_bits_in);
+  MLSContext(CipherSuite suite_in, size_t epoch_bits_in, provider::ProviderPtr provider = nullptr);
 
   void add_epoch(EpochID epoch_id, const bytes& sframe_epoch_secret);
   void add_epoch(EpochID epoch_id,
@@ -140,7 +116,7 @@ private:
     EpochKeys(EpochID full_epoch_in,
               bytes sframe_epoch_secret_in,
               size_t sender_bits_in);
-    KeyState& get(CipherSuite suite, SenderID sender_id);
+    KeyState& get(CipherSuite suite, SenderID sender_id, const provider::Provider& provider);
   };
 
   std::vector<std::unique_ptr<EpochKeys>> epoch_cache;

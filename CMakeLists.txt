@@ -8,6 +8,7 @@ project(sframe
 option(TESTING    "Build tests" OFF)
 option(CLANG_TIDY "Perform linting with clang-tidy" OFF)
 option(SANITIZERS "Enable sanitizers" OFF)
+option(BUILTIN_PROVIDER "Use the built-in OpenSSL crypto provider" ON)
 
 ###
 ### Global Config
@@ -80,13 +81,19 @@ target_include_directories( gsl INTERFACE ${GSL_LITE_INCLUDE_DIR} )
 ###
 
 set(LIB_NAME "${PROJECT_NAME}")
+add_subdirectory(src/providers)
 
-file(GLOB_RECURSE LIB_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h")
-file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-
-add_library(${LIB_NAME} ${LIB_HEADERS} ${LIB_SOURCES})
+add_library(${LIB_NAME} src/header.h src/header.cpp src/sframe.cpp)
 add_dependencies(${LIB_NAME} gsl)
-target_link_libraries(${LIB_NAME} PRIVATE gsl OpenSSL::Crypto)
+target_link_libraries(${LIB_NAME}
+  PRIVATE
+    gsl
+  PUBLIC
+    "${PROJECT_NAME}_provider")
+if(BUILTIN_PROVIDER)
+  target_link_libraries(${LIB_NAME} PRIVATE "${PROJECT_NAME}_openssl")
+  target_compile_definitions(${LIB_NAME} PRIVATE -DBUILTIN_PROVIDER)
+endif(BUILTIN_PROVIDER)
 target_include_directories(${LIB_NAME}
   PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
@@ -97,6 +104,9 @@ target_include_directories(${LIB_NAME}
 ### Tests
 ###
 if(TESTING)
+  if (NOT BUILTIN_PROVIDER)
+    message(FATAL_ERROR "Tests currently require the built-in provider to be enabled")
+  endif(NOT BUILTIN_PROVIDER)
   enable_testing()
   add_subdirectory(test)
 endif()

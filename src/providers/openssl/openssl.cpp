@@ -1,17 +1,17 @@
-#include "crypto.h"
-
+#include "openssl.h"
 #include <openssl/err.h>
-#include <openssl/evp.h>
 
 namespace sframe {
+namespace provider {
+namespace openssl {
 
-///
-/// Convert between native identifiers / errors and OpenSSL ones
-///
+using scoped_evp_ctx =
+  std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>;
 
 openssl_error::openssl_error()
   : std::runtime_error(ERR_error_string(ERR_get_error(), nullptr))
-{}
+{
+}
 
 static const EVP_MD*
 openssl_digest_type(CipherSuite suite)
@@ -68,18 +68,43 @@ openssl_tag_size(CipherSuite suite)
   }
 }
 
-///
-/// Information about algorithms
-///
+OpenSSLProvider::HMAC::HMAC(CipherSuite suite, input_bytes key)
+  : ctx(HMAC_CTX_new(), HMAC_CTX_free)
+{
+  auto type = openssl_digest_type(suite);
+  auto key_size = static_cast<int>(key.size());
+  if (1 != HMAC_Init_ex(ctx.get(), key.data(), key_size, type, nullptr)) {
+    throw openssl_error();
+  }
+}
 
-size_t
-cipher_digest_size(CipherSuite suite)
+void
+OpenSSLProvider::HMAC::write(input_bytes data)
+{
+  if (1 != HMAC_Update(ctx.get(), data.data(), data.size())) {
+    throw openssl_error();
+  }
+}
+
+input_bytes
+OpenSSLProvider::HMAC::digest()
+{
+  unsigned int size = 0;
+  if (1 != HMAC_Final(ctx.get(), md.data(), &size)) {
+    throw openssl_error();
+  }
+
+  return input_bytes(md.data(), size);
+}
+
+std::size_t
+OpenSSLProvider::cipher_digest_size(CipherSuite suite) const
 {
   return EVP_MD_size(openssl_digest_type(suite));
 }
 
-size_t
-cipher_key_size(CipherSuite suite)
+std::size_t
+OpenSSLProvider::cipher_key_size(CipherSuite suite) const
 {
   switch (suite) {
     case CipherSuite::AES_CM_128_HMAC_SHA256_4:
@@ -95,8 +120,8 @@ cipher_key_size(CipherSuite suite)
   }
 }
 
-size_t
-cipher_nonce_size(CipherSuite suite)
+std::size_t
+OpenSSLProvider::cipher_nonce_size(CipherSuite suite) const
 {
   switch (suite) {
     case CipherSuite::AES_CM_128_HMAC_SHA256_4:
@@ -110,41 +135,10 @@ cipher_nonce_size(CipherSuite suite)
   }
 }
 
-///
-/// HMAC and HKDF
-///
-
-HMAC::HMAC(CipherSuite suite, input_bytes key)
-  : ctx(HMAC_CTX_new(), HMAC_CTX_free)
-{
-  auto type = openssl_digest_type(suite);
-  auto key_size = static_cast<int>(key.size());
-  if (1 != HMAC_Init_ex(ctx.get(), key.data(), key_size, type, nullptr)) {
-    throw openssl_error();
-  }
-}
-
-void
-HMAC::write(input_bytes data)
-{
-  if (1 != HMAC_Update(ctx.get(), data.data(), data.size())) {
-    throw openssl_error();
-  }
-}
-
-input_bytes
-HMAC::digest()
-{
-  unsigned int size = 0;
-  if (1 != HMAC_Final(ctx.get(), md.data(), &size)) {
-    throw openssl_error();
-  }
-
-  return input_bytes(md.data(), size);
-}
-
-static bytes
-hmac_for_hkdf(CipherSuite suite, input_bytes key, input_bytes data)
+bytes
+OpenSSLProvider::hmac_for_hkdf(CipherSuite suite,
+                               input_bytes key,
+                               input_bytes data) const
 {
   const auto type = openssl_digest_type(suite);
   auto ctx = scoped_hmac_ctx(HMAC_CTX_new(), HMAC_CTX_free);
@@ -186,20 +180,18 @@ hmac_for_hkdf(CipherSuite suite, input_bytes key, input_bytes data)
 }
 
 bytes
-hkdf_extract(CipherSuite suite, const bytes& salt, const bytes& ikm)
+OpenSSLProvider::hkdf_extract(CipherSuite suite,
+                              const bytes& salt,
+                              const bytes& ikm) const
 {
   return hmac_for_hkdf(suite, salt, ikm);
 }
 
-// For simplicity, we enforce that size <= Hash.length, so that
-// HKDF-Expand(Secret, Label) reduces to:
-//
-//   HMAC(Secret, Label || 0x01)
 bytes
-hkdf_expand(CipherSuite suite,
-            const bytes& secret,
-            const bytes& info,
-            size_t size)
+OpenSSLProvider::hkdf_expand(CipherSuite suite,
+                             const bytes& secret,
+                             const bytes& info,
+                             std::size_t size) const
 {
   // Ensure that we need only one hash invocation
   if (size > cipher_digest_size(suite)) {
@@ -212,10 +204,6 @@ hkdf_expand(CipherSuite suite,
   mac.resize(size);
   return mac;
 }
-
-///
-/// AEAD Algorithms
-///
 
 static void
 ctr_crypt(CipherSuite suite,
@@ -255,13 +243,13 @@ ctr_crypt(CipherSuite suite,
   }
 }
 
-static output_bytes
-seal_ctr(CipherSuite suite,
+output_bytes
+OpenSSLProvider::seal_ctr(CipherSuite suite,
          const bytes& key,
          const bytes& nonce,
          output_bytes ct,
          input_bytes aad,
-         input_bytes pt)
+         input_bytes pt) const
 {
   auto tag_size = openssl_tag_size(suite);
   if (ct.size() < pt.size() + tag_size) {
@@ -345,12 +333,12 @@ seal_aead(CipherSuite suite,
 }
 
 output_bytes
-seal(CipherSuite suite,
-     const bytes& key,
-     const bytes& nonce,
-     output_bytes ct,
-     input_bytes aad,
-     input_bytes pt)
+OpenSSLProvider::seal(CipherSuite suite,
+                      const bytes& key,
+                      const bytes& nonce,
+                      output_bytes ct,
+                      input_bytes aad,
+                      input_bytes pt) const
 {
   switch (suite) {
     case CipherSuite::AES_CM_128_HMAC_SHA256_4:
@@ -367,13 +355,13 @@ seal(CipherSuite suite,
   throw unsupported_ciphersuite_error();
 }
 
-static output_bytes
-open_ctr(CipherSuite suite,
+output_bytes
+OpenSSLProvider::open_ctr(CipherSuite suite,
          const bytes& key,
          const bytes& nonce,
          output_bytes pt,
          input_bytes aad,
-         input_bytes ct)
+         input_bytes ct) const
 {
   auto tag_size = openssl_tag_size(suite);
   if (ct.size() < tag_size) {
@@ -466,12 +454,12 @@ open_aead(CipherSuite suite,
 }
 
 output_bytes
-open(CipherSuite suite,
-     const bytes& key,
-     const bytes& nonce,
-     output_bytes pt,
-     input_bytes aad,
-     input_bytes ct)
+OpenSSLProvider::open(CipherSuite suite,
+                      const bytes& key,
+                      const bytes& nonce,
+                      output_bytes pt,
+                      input_bytes aad,
+                      input_bytes ct) const
 {
   switch (suite) {
     case CipherSuite::AES_CM_128_HMAC_SHA256_4:
@@ -488,4 +476,6 @@ open(CipherSuite suite,
   throw unsupported_ciphersuite_error();
 }
 
-} // namespace sframe
+}
+}
+}
