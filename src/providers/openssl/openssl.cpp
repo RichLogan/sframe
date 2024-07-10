@@ -97,14 +97,16 @@ OpenSSLProvider::HMAC::digest()
   return input_bytes(md.data(), size);
 }
 
+OpenSSLProvider::OpenSSLProvider(CipherSuite suite): suite(suite) {}
+
 std::size_t
-OpenSSLProvider::cipher_digest_size(CipherSuite suite) const
+OpenSSLProvider::cipher_digest_size() const
 {
   return EVP_MD_size(openssl_digest_type(suite));
 }
 
 std::size_t
-OpenSSLProvider::cipher_key_size(CipherSuite suite) const
+OpenSSLProvider::cipher_key_size() const
 {
   switch (suite) {
     case CipherSuite::AES_CM_128_HMAC_SHA256_4:
@@ -121,7 +123,7 @@ OpenSSLProvider::cipher_key_size(CipherSuite suite) const
 }
 
 std::size_t
-OpenSSLProvider::cipher_nonce_size(CipherSuite suite) const
+OpenSSLProvider::cipher_nonce_size() const
 {
   switch (suite) {
     case CipherSuite::AES_CM_128_HMAC_SHA256_4:
@@ -136,8 +138,7 @@ OpenSSLProvider::cipher_nonce_size(CipherSuite suite) const
 }
 
 bytes
-OpenSSLProvider::hmac_for_hkdf(CipherSuite suite,
-                               input_bytes key,
+OpenSSLProvider::hmac_for_hkdf(input_bytes key,
                                input_bytes data) const
 {
   const auto type = openssl_digest_type(suite);
@@ -170,7 +171,7 @@ OpenSSLProvider::hmac_for_hkdf(CipherSuite suite,
     throw openssl_error();
   }
 
-  auto md = bytes(cipher_digest_size(suite));
+  auto md = bytes(cipher_digest_size());
   unsigned int size = 0;
   if (1 != HMAC_Final(ctx.get(), md.data(), &size)) {
     throw openssl_error();
@@ -180,27 +181,25 @@ OpenSSLProvider::hmac_for_hkdf(CipherSuite suite,
 }
 
 bytes
-OpenSSLProvider::hkdf_extract(CipherSuite suite,
-                              const bytes& salt,
+OpenSSLProvider::hkdf_extract(const bytes& salt,
                               const bytes& ikm) const
 {
-  return hmac_for_hkdf(suite, salt, ikm);
+  return hmac_for_hkdf(salt, ikm);
 }
 
 bytes
-OpenSSLProvider::hkdf_expand(CipherSuite suite,
-                             const bytes& secret,
+OpenSSLProvider::hkdf_expand(const bytes& secret,
                              const bytes& info,
                              std::size_t size) const
 {
   // Ensure that we need only one hash invocation
-  if (size > cipher_digest_size(suite)) {
+  if (size > cipher_digest_size()) {
     throw invalid_parameter_error("Size too big for hkdf_expand");
   }
 
   auto label = info;
   label.push_back(0x01);
-  auto mac = hmac_for_hkdf(suite, secret, label);
+  auto mac = hmac_for_hkdf(secret, label);
   mac.resize(size);
   return mac;
 }
@@ -243,9 +242,13 @@ ctr_crypt(CipherSuite suite,
   }
 }
 
+bool OpenSSLProvider::is_ctr_hmac() const
+{
+  return suite == CipherSuite::AES_CM_128_HMAC_SHA256_4 || suite == CipherSuite::AES_CM_128_HMAC_SHA256_8;
+}
+
 output_bytes
-OpenSSLProvider::seal_ctr(CipherSuite suite,
-         const bytes& key,
+OpenSSLProvider::seal_ctr(const bytes& key,
          const bytes& nonce,
          output_bytes ct,
          input_bytes aad,
@@ -258,7 +261,7 @@ OpenSSLProvider::seal_ctr(CipherSuite suite,
 
   // Split the key into enc and auth subkeys
   auto key_span = input_bytes(key);
-  auto enc_key_size = cipher_key_size(suite);
+  auto enc_key_size = cipher_key_size();
   auto enc_key = key_span.subspan(0, enc_key_size);
   auto auth_key = key_span.subspan(enc_key_size);
 
@@ -333,8 +336,7 @@ seal_aead(CipherSuite suite,
 }
 
 output_bytes
-OpenSSLProvider::seal(CipherSuite suite,
-                      const bytes& key,
+OpenSSLProvider::seal(const bytes& key,
                       const bytes& nonce,
                       output_bytes ct,
                       input_bytes aad,
@@ -343,7 +345,7 @@ OpenSSLProvider::seal(CipherSuite suite,
   switch (suite) {
     case CipherSuite::AES_CM_128_HMAC_SHA256_4:
     case CipherSuite::AES_CM_128_HMAC_SHA256_8: {
-      return seal_ctr(suite, key, nonce, ct, aad, pt);
+      return seal_ctr(key, nonce, ct, aad, pt);
     }
 
     case CipherSuite::AES_GCM_128_SHA256:
@@ -356,8 +358,7 @@ OpenSSLProvider::seal(CipherSuite suite,
 }
 
 output_bytes
-OpenSSLProvider::open_ctr(CipherSuite suite,
-         const bytes& key,
+OpenSSLProvider::open_ctr(const bytes& key,
          const bytes& nonce,
          output_bytes pt,
          input_bytes aad,
@@ -374,7 +375,7 @@ OpenSSLProvider::open_ctr(CipherSuite suite,
 
   // Split the key into enc and auth subkeys
   auto key_span = input_bytes(key);
-  auto enc_key_size = cipher_key_size(suite);
+  auto enc_key_size = cipher_key_size();
   auto enc_key = key_span.subspan(0, enc_key_size);
   auto auth_key = key_span.subspan(enc_key_size);
 
@@ -454,8 +455,7 @@ open_aead(CipherSuite suite,
 }
 
 output_bytes
-OpenSSLProvider::open(CipherSuite suite,
-                      const bytes& key,
+OpenSSLProvider::open(const bytes& key,
                       const bytes& nonce,
                       output_bytes pt,
                       input_bytes aad,
@@ -464,7 +464,7 @@ OpenSSLProvider::open(CipherSuite suite,
   switch (suite) {
     case CipherSuite::AES_CM_128_HMAC_SHA256_4:
     case CipherSuite::AES_CM_128_HMAC_SHA256_8: {
-      return open_ctr(suite, key, nonce, pt, aad, ct);
+      return open_ctr(key, nonce, pt, aad, ct);
     }
 
     case CipherSuite::AES_GCM_128_SHA256:

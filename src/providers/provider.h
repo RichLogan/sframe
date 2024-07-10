@@ -58,32 +58,29 @@ struct Provider
   ///
   /// Information about algorithms
   ///
-  virtual std::size_t cipher_digest_size(CipherSuite suite) const = 0;
-  virtual std::size_t cipher_key_size(CipherSuite suite) const = 0;
-  virtual std::size_t cipher_nonce_size(CipherSuite suite) const = 0;
+  virtual std::size_t cipher_digest_size() const = 0;
+  virtual std::size_t cipher_key_size() const = 0;
+  virtual std::size_t cipher_nonce_size() const = 0;
 
   ///
   /// HMAC and HKDF
   ///
-  virtual bytes hkdf_extract(CipherSuite suite,
-                             const bytes& salt,
+  virtual bytes hkdf_extract(const bytes& salt,
                              const bytes& ikm) const = 0;
-  virtual bytes hkdf_expand(CipherSuite suite,
-                            const bytes& secret,
+  virtual bytes hkdf_expand(const bytes& secret,
                             const bytes& info,
                             std::size_t size) const = 0;
+  virtual bool is_ctr_hmac() const = 0;
 
   ///
   /// AEAD Algorithms
   ///
-  virtual output_bytes seal(CipherSuite suite,
-                            const bytes& key,
+  virtual output_bytes seal(const bytes& key,
                             const bytes& nonce,
                             output_bytes ct,
                             input_bytes aad,
                             input_bytes pt) const = 0;
-  virtual output_bytes open(CipherSuite suite,
-                            const bytes& key,
+  virtual output_bytes open(const bytes& key,
                             const bytes& nonce,
                             output_bytes pt,
                             input_bytes aad,

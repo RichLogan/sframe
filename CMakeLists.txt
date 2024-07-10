@@ -92,7 +92,7 @@ target_link_libraries(${LIB_NAME}
     "${PROJECT_NAME}_provider")
 if(BUILTIN_PROVIDER)
   target_link_libraries(${LIB_NAME} PRIVATE "${PROJECT_NAME}_openssl")
-  target_compile_definitions(${LIB_NAME} PRIVATE -DBUILTIN_PROVIDER)
+  target_compile_definitions(${LIB_NAME} PUBLIC -DBUILTIN_PROVIDER)
 endif(BUILTIN_PROVIDER)
 target_include_directories(${LIB_NAME}
   PUBLIC

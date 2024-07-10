@@ -23,16 +23,13 @@ using Counter = uint64_t;
 class SFrame
 {
 protected:
-  CipherSuite suite;
   provider::ProviderPtr provider;
 
-  SFrame(CipherSuite suite_in,
   #if defined(BUILTIN_PROVIDER)
-  provider::ProviderPtr provider = nullptr
-  #else
-  provider::ProviderPtr provider
+  // [[deprecated]]
+  SFrame(CipherSuite suite_in);
   #endif
-  );
+  SFrame(provider::ProviderPtr provider);
   SFrame(SFrame&& other) noexcept;
   SFrame& operator=(SFrame&& other) noexcept;
   SFrame(const SFrame&) = delete;
@@ -42,7 +39,7 @@ protected:
 
   struct KeyState
   {
-    static KeyState from_base_key(CipherSuite suite, const bytes& base_key, const provider::Provider& provider);
+    static KeyState from_base_key(const bytes& base_key, const provider::Provider& provider);
 
     bytes key;
     bytes salt;
@@ -60,7 +57,11 @@ protected:
 class Context : public SFrame
 {
 public:
-  Context(CipherSuite suite, provider::ProviderPtr provider = nullptr);
+#if defined(BUILTIN_PROVIDER)
+  // [[deprecated]]
+  Context(CipherSuite suite);
+#endif
+  Context(provider::ProviderPtr provider);
 
   void add_key(KeyID kid, const bytes& key);
 
@@ -82,7 +83,11 @@ public:
   using SenderID = uint64_t;
   using ContextID = uint64_t;
 
-  MLSContext(CipherSuite suite_in, size_t epoch_bits_in, provider::ProviderPtr provider = nullptr);
+#if defined(BUILTIN_PROVIDER)
+  // [[deprecated]]
+  MLSContext(CipherSuite suite_in, size_t epoch_bits_in);
+#endif
+  MLSContext(provider::ProviderPtr provider, size_t epoch_bits_in);
 
   void add_epoch(EpochID epoch_id, const bytes& sframe_epoch_secret);
   void add_epoch(EpochID epoch_id,
@@ -116,7 +121,7 @@ private:
     EpochKeys(EpochID full_epoch_in,
               bytes sframe_epoch_secret_in,
               size_t sender_bits_in);
-    KeyState& get(CipherSuite suite, SenderID sender_id, const provider::Provider& provider);
+    KeyState& get(SenderID sender_id, const provider::Provider& provider);
   };
 
   std::vector<std::unique_ptr<EpochKeys>> epoch_cache;
