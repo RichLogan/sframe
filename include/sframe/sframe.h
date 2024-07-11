@@ -24,7 +24,7 @@ class SFrame
 protected:
   Cipher suite;
 
-  SFrame(CipherSuite suite_in, provider::ProviderPtr provider);
+  SFrame(CipherSuite suite, provider::ProviderPtr provider);
   SFrame(Cipher suite);
   SFrame(SFrame&& other) noexcept;
   SFrame& operator=(SFrame&& other) noexcept;
@@ -33,7 +33,7 @@ protected:
 
   struct KeyState
   {
-    static KeyState from_base_key(const bytes& base_key, const Cipher& cipher);
+    static KeyState from_base_key(const Cipher& suite, const bytes& base_key);
 
     bytes key;
     bytes salt;
@@ -51,14 +51,14 @@ protected:
 class Context : public SFrame
 {
 public:
-  Context(CipherSuite suite_in,
+  Context(CipherSuite suite,
          provider::ProviderPtr provider
 #if defined(BUILTIN_PROVIDER)
         // Defaults for backwards API compatability.
          = nullptr
 #endif
   );
-  Context(Cipher cipher);
+  Context(Cipher suite);
 
   void add_key(KeyID kid, const bytes& key);
 
@@ -80,7 +80,7 @@ public:
   using SenderID = uint64_t;
   using ContextID = uint64_t;
 
-  MLSContext(CipherSuite suite_in,
+  MLSContext(CipherSuite suite,
              size_t epoch_bits_in,
              provider::ProviderPtr provider
 #if defined(BUILTIN_PROVIDER)
@@ -89,7 +89,7 @@ public:
 #endif
   );
 
-  MLSContext(Cipher cipher, size_t epoch_bits_in);
+  MLSContext(Cipher suite, size_t epoch_bits_in);
 
   void add_epoch(EpochID epoch_id, const bytes& sframe_epoch_secret);
   void add_epoch(EpochID epoch_id,
@@ -123,7 +123,7 @@ private:
     EpochKeys(EpochID full_epoch_in,
               bytes sframe_epoch_secret_in,
               size_t sender_bits_in);
-    KeyState& get(SenderID sender_id, const Cipher& cipher);
+    KeyState& get(const Cipher& suite, SenderID sender_id);
   };
 
   std::vector<std::unique_ptr<EpochKeys>> epoch_cache;

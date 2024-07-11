@@ -65,16 +65,6 @@ struct OpenSSLProvider : Provider
                     input_bytes ct) const override;
 
 private:
-  struct HMAC
-  {
-    HMAC(CipherSuite suite, input_bytes key);
-    void write(input_bytes data);
-    input_bytes digest();
-
-    scoped_hmac_ctx ctx;
-    std::array<std::uint8_t, EVP_MAX_MD_SIZE> md;
-  };
-
   bytes hmac_for_hkdf(CipherSuite cipher,
                       input_bytes key,
                       input_bytes data) const;
@@ -91,6 +81,17 @@ private:
                         input_bytes aad,
                         input_bytes ct) const;
 };
+
+struct HMAC
+{
+  HMAC(CipherSuite suite, input_bytes key);
+  void write(input_bytes data);
+  input_bytes digest();
+
+  scoped_hmac_ctx ctx;
+  std::array<std::uint8_t, EVP_MAX_MD_SIZE> md;
+};
+
 }
 }
 }

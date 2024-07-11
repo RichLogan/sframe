@@ -29,12 +29,12 @@ operator<<(std::ostream& str, const input_bytes data)
 /// Context
 ///
 
-Context::Context(CipherSuite suite_in, provider::ProviderPtr provider)
-  : SFrame(suite_in, std::move(provider))
+Context::Context(CipherSuite suite, provider::ProviderPtr provider)
+  : SFrame(suite, std::move(provider))
 {}
 
-Context::Context(Cipher cipher)
-  : SFrame(std::move(cipher))
+Context::Context(Cipher suite)
+  : SFrame(std::move(suite))
 {}
 
 static const bytes sframe_label{
@@ -52,23 +52,23 @@ static const bytes sframe_enc_label{ 0x65, 0x6e, 0x63 };        // "enc"
 static const bytes sframe_auth_label{ 0x61, 0x75, 0x74, 0x68 }; // "auth"
 
 SFrame::KeyState
-SFrame::KeyState::from_base_key(const bytes& base_key, const Cipher& cipher)
+SFrame::KeyState::from_base_key(const Cipher& suite, const bytes& base_key)
 {
-  auto key_size = cipher.key_size();
-  auto nonce_size = cipher.nonce_size();
-  auto hash_size = cipher.digest_size();
+  auto key_size = suite.key_size();
+  auto nonce_size = suite.nonce_size();
+  auto hash_size = suite.digest_size();
 
-  auto secret = cipher.hkdf_extract(sframe_label, base_key);
-  auto key = cipher.hkdf_expand(secret, sframe_key_label, key_size);
-  auto salt = cipher.hkdf_expand(secret, sframe_salt_label, nonce_size);
+  auto secret = suite.hkdf_extract(sframe_label, base_key);
+  auto key = suite.hkdf_expand(secret, sframe_key_label, key_size);
+  auto salt = suite.hkdf_expand(secret, sframe_salt_label, nonce_size);
 
   // If using CTR+HMAC, set key = enc_key || auth_key
-  if (cipher.is_ctr_hmac()) {
-    secret = cipher.hkdf_extract(sframe_ctr_label, key);
+  if (suite.is_ctr_hmac()) {
+    secret = suite.hkdf_extract(sframe_ctr_label, key);
 
     auto main_key = key;
-    auto enc_key = cipher.hkdf_expand(secret, sframe_enc_label, key_size);
-    auto auth_key = cipher.hkdf_expand(secret, sframe_auth_label, hash_size);
+    auto enc_key = suite.hkdf_expand(secret, sframe_enc_label, key_size);
+    auto auth_key = suite.hkdf_expand(secret, sframe_auth_label, hash_size);
 
     key = enc_key;
     key.insert(key.end(), auth_key.begin(), auth_key.end());
@@ -80,7 +80,7 @@ SFrame::KeyState::from_base_key(const bytes& base_key, const Cipher& cipher)
 void
 Context::add_key(KeyID key_id, const bytes& base_key)
 {
-  auto key_state = KeyState::from_base_key(base_key, suite);
+  auto key_state = KeyState::from_base_key(suite, base_key);
   state[key_id] = std::move(key_state);
 }
 
@@ -195,8 +195,8 @@ MLSContext::MLSContext(CipherSuite suite_in, size_t epoch_bits_in, provider::Pro
                 [&](std::unique_ptr<EpochKeys>& ptr) { ptr.reset(nullptr); });
 }
 
-MLSContext::MLSContext(Cipher cipher, size_t epoch_bits_in)
-  : SFrame(std::move(cipher))
+MLSContext::MLSContext(Cipher suite, size_t epoch_bits_in)
+  : SFrame(std::move(suite))
   , epoch_bits(epoch_bits_in)
   , epoch_mask((size_t(1) << epoch_bits_in) - 1)
   , epoch_cache(size_t(1) << epoch_bits_in)
@@ -289,7 +289,7 @@ MLSContext::EpochKeys::EpochKeys(MLSContext::EpochID full_epoch_in,
 {}
 
 SFrame::KeyState&
-MLSContext::EpochKeys::get(SenderID sender_id, const Cipher& suite)
+MLSContext::EpochKeys::get(const Cipher& suite, SenderID sender_id)
 {
   auto it = sender_keys.find(sender_id);
   if (it != sender_keys.end()) {
@@ -302,7 +302,7 @@ MLSContext::EpochKeys::get(SenderID sender_id, const Cipher& suite)
 
   auto sender_base_key =
     suite.hkdf_expand(sframe_epoch_secret, enc_sender_id, hash_size);
-  auto key_state = KeyState::from_base_key(sender_base_key, suite);
+  auto key_state = KeyState::from_base_key(suite, sender_base_key);
   sender_keys.insert({ sender_id, std::move(key_state) });
 
   return sender_keys.at(sender_id);
@@ -321,7 +321,7 @@ MLSContext::get_state(KeyID key_id)
       ", sender_id:" + std::to_string(sender_id));
   }
 
-  return epoch->get(sender_id, suite);
+  return epoch->get(suite, sender_id);
 }
 
 } // namespace sframe

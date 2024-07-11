@@ -1,5 +1,6 @@
 #include "openssl.h"
 #include <openssl/err.h>
+#include <openssl/evp.h>
 
 namespace sframe {
 namespace provider {
@@ -10,8 +11,7 @@ using scoped_evp_ctx =
 
 openssl_error::openssl_error()
   : std::runtime_error(ERR_error_string(ERR_get_error(), nullptr))
-{
-}
+{}
 
 static const EVP_MD*
 openssl_digest_type(CipherSuite suite)
@@ -68,34 +68,9 @@ openssl_tag_size(CipherSuite suite)
   }
 }
 
-OpenSSLProvider::HMAC::HMAC(CipherSuite suite, input_bytes key)
-  : ctx(HMAC_CTX_new(), HMAC_CTX_free)
-{
-  auto type = openssl_digest_type(suite);
-  auto key_size = static_cast<int>(key.size());
-  if (1 != HMAC_Init_ex(ctx.get(), key.data(), key_size, type, nullptr)) {
-    throw openssl_error();
-  }
-}
-
-void
-OpenSSLProvider::HMAC::write(input_bytes data)
-{
-  if (1 != HMAC_Update(ctx.get(), data.data(), data.size())) {
-    throw openssl_error();
-  }
-}
-
-input_bytes
-OpenSSLProvider::HMAC::digest()
-{
-  unsigned int size = 0;
-  if (1 != HMAC_Final(ctx.get(), md.data(), &size)) {
-    throw openssl_error();
-  }
-
-  return input_bytes(md.data(), size);
-}
+///
+/// Information about algorithms
+///
 
 std::set<CipherSuite>
 OpenSSLProvider::supported_ciphersuites() const
@@ -142,6 +117,39 @@ OpenSSLProvider::cipher_nonce_size(CipherSuite suite) const
     default:
       throw unsupported_ciphersuite_error();
   }
+}
+
+///
+/// HMAC and HKDF
+///
+
+HMAC::HMAC(CipherSuite suite, input_bytes key)
+  : ctx(HMAC_CTX_new(), HMAC_CTX_free)
+{
+  auto type = openssl_digest_type(suite);
+  auto key_size = static_cast<int>(key.size());
+  if (1 != HMAC_Init_ex(ctx.get(), key.data(), key_size, type, nullptr)) {
+    throw openssl_error();
+  }
+}
+
+void
+HMAC::write(input_bytes data)
+{
+  if (1 != HMAC_Update(ctx.get(), data.data(), data.size())) {
+    throw openssl_error();
+  }
+}
+
+input_bytes
+HMAC::digest()
+{
+  unsigned int size = 0;
+  if (1 != HMAC_Final(ctx.get(), md.data(), &size)) {
+    throw openssl_error();
+  }
+
+  return input_bytes(md.data(), size);
 }
 
 bytes
