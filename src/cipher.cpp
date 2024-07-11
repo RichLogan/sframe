@@ -2,27 +2,27 @@
 
 namespace sframe {
 
-Cipher::Cipher(CipherSuite cipher_suite, provider::ProviderPtr provider)
-  : Cipher(static_cast<CipherSuiteIdentifier>(cipher_suite),
+CipherSuiteImpl::CipherSuiteImpl(CipherSuite cipher_suite, provider::ProviderPtr provider)
+  : CipherSuiteImpl(static_cast<CipherSuiteId>(cipher_suite),
            std::move(provider))
 {
 }
 
-Cipher::Cipher(CipherSuiteIdentifier cipher_suite,
+CipherSuiteImpl::CipherSuiteImpl(CipherSuiteId cipher_suite,
                provider::ProviderPtr provider)
   : id(cipher_suite)
   , provider(std::move(provider))
 {
 }
 
-Cipher::Cipher(Cipher&& other) noexcept
+CipherSuiteImpl::CipherSuiteImpl(CipherSuiteImpl&& other) noexcept
   : id(other.id)
   , provider(std::move(other.provider))
 {
 }
 
-Cipher&
-Cipher::operator=(Cipher&& other) noexcept
+CipherSuiteImpl&
+CipherSuiteImpl::operator=(CipherSuiteImpl&& other) noexcept
 {
   id = other.id;
   provider = std::move(other.provider);
@@ -30,29 +30,29 @@ Cipher::operator=(Cipher&& other) noexcept
 }
 
 std::size_t
-Cipher::digest_size() const
+CipherSuiteImpl::digest_size() const
 {
   return provider->cipher_digest_size(id);
 }
 
 std::size_t
-Cipher::key_size() const
+CipherSuiteImpl::key_size() const
 {
   return provider->cipher_key_size(id);
 }
 
 std::size_t
-Cipher::nonce_size() const
+CipherSuiteImpl::nonce_size() const
 {
   return provider->cipher_nonce_size(id);
 }
 
 bool
-Cipher::is_ctr_hmac() const
+CipherSuiteImpl::is_ctr_hmac() const
 {
-  return id == static_cast<CipherSuiteIdentifier>(
+  return id == static_cast<CipherSuiteId>(
                  CipherSuite::AES_CM_128_HMAC_SHA256_4) ||
-         id == static_cast<CipherSuiteIdentifier>(
+         id == static_cast<CipherSuiteId>(
                  CipherSuite::AES_CM_128_HMAC_SHA256_8);
 }
 
@@ -60,13 +60,13 @@ Cipher::is_ctr_hmac() const
 /// HMAC and HKDF
 ///
 bytes
-Cipher::hkdf_extract(const bytes& salt, const bytes& ikm) const
+CipherSuiteImpl::hkdf_extract(const bytes& salt, const bytes& ikm) const
 {
   return provider->hkdf_extract(id, salt, ikm);
 }
 
 bytes
-Cipher::hkdf_expand(const bytes& secret,
+CipherSuiteImpl::hkdf_expand(const bytes& secret,
                     const bytes& info,
                     std::size_t size) const
 {
@@ -77,7 +77,7 @@ Cipher::hkdf_expand(const bytes& secret,
 /// AEAD Algorithms
 ///
 output_bytes
-Cipher::seal(const bytes& key,
+CipherSuiteImpl::seal(const bytes& key,
              const bytes& nonce,
              output_bytes ct,
              input_bytes aad,
@@ -87,7 +87,7 @@ Cipher::seal(const bytes& key,
 }
 
 output_bytes
-Cipher::open(const bytes& key,
+CipherSuiteImpl::open(const bytes& key,
              const bytes& nonce,
              output_bytes pt,
              input_bytes aad,

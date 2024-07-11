@@ -33,7 +33,7 @@ Context::Context(CipherSuite suite, provider::ProviderPtr provider)
   : SFrame(suite, std::move(provider))
 {}
 
-Context::Context(Cipher suite)
+Context::Context(CipherSuiteImpl suite)
   : SFrame(std::move(suite))
 {}
 
@@ -52,7 +52,7 @@ static const bytes sframe_enc_label{ 0x65, 0x6e, 0x63 };        // "enc"
 static const bytes sframe_auth_label{ 0x61, 0x75, 0x74, 0x68 }; // "auth"
 
 SFrame::KeyState
-SFrame::KeyState::from_base_key(const Cipher& suite, const bytes& base_key)
+SFrame::KeyState::from_base_key(const CipherSuiteImpl& suite, const bytes& base_key)
 {
   auto key_size = suite.key_size();
   auto nonce_size = suite.nonce_size();
@@ -109,10 +109,10 @@ validate(provider::ProviderPtr provider)
 }
 
 SFrame::SFrame(CipherSuite suite_in, provider::ProviderPtr provider)
-  : suite(Cipher(suite_in, validate(std::move(provider))))
+  : suite(CipherSuiteImpl(suite_in, validate(std::move(provider))))
 {}
 
-SFrame::SFrame(Cipher suite)
+SFrame::SFrame(CipherSuiteImpl suite)
   : suite(std::move(suite))
 {}
 
@@ -201,7 +201,7 @@ MLSContext::MLSContext(CipherSuite suite_in,
                 [&](std::unique_ptr<EpochKeys>& ptr) { ptr.reset(nullptr); });
 }
 
-MLSContext::MLSContext(Cipher suite, size_t epoch_bits_in)
+MLSContext::MLSContext(CipherSuiteImpl suite, size_t epoch_bits_in)
   : SFrame(std::move(suite))
   , epoch_bits(epoch_bits_in)
   , epoch_mask((size_t(1) << epoch_bits_in) - 1)
@@ -295,7 +295,7 @@ MLSContext::EpochKeys::EpochKeys(MLSContext::EpochID full_epoch_in,
 {}
 
 SFrame::KeyState&
-MLSContext::EpochKeys::get(const Cipher& suite, SenderID sender_id)
+MLSContext::EpochKeys::get(const CipherSuiteImpl& suite, SenderID sender_id)
 {
   auto it = sender_keys.find(sender_id);
   if (it != sender_keys.end()) {

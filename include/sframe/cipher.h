@@ -5,10 +5,10 @@
 
 namespace sframe {
 
-using CipherSuiteIdentifier = std::uint16_t;
+using CipherSuiteId = std::uint16_t;
 
 // Built in cipher suite identifiers.
-enum class CipherSuite : CipherSuiteIdentifier
+enum class CipherSuite : CipherSuiteId
 {
   AES_CM_128_HMAC_SHA256_4 = 1,
   AES_CM_128_HMAC_SHA256_8 = 2,
@@ -16,16 +16,16 @@ enum class CipherSuite : CipherSuiteIdentifier
   AES_GCM_256_SHA512 = 4,
 };
 
-class Cipher
+class CipherSuiteImpl
 {
 public:
-  Cipher(CipherSuite cipher_suite, provider::ProviderPtr provider);
-  Cipher(CipherSuiteIdentifier cipher_suite, provider::ProviderPtr provider);
+  CipherSuiteImpl(CipherSuite cipher_suite, provider::ProviderPtr provider);
+  CipherSuiteImpl(CipherSuiteId cipher_suite, provider::ProviderPtr provider);
 
-  Cipher(Cipher&& other) noexcept;
-  Cipher& operator=(Cipher&& other) noexcept;
-  Cipher(const Cipher&) = delete;
-  Cipher& operator=(const Cipher&) = delete;
+  CipherSuiteImpl(CipherSuiteImpl&& other) noexcept;
+  CipherSuiteImpl& operator=(CipherSuiteImpl&& other) noexcept;
+  CipherSuiteImpl(const CipherSuiteImpl&) = delete;
+  CipherSuiteImpl& operator=(const CipherSuiteImpl&) = delete;
 
   ///
   /// Cipher properties
@@ -58,7 +58,7 @@ public:
                     input_bytes ct) const;
 
 protected:
-  CipherSuiteIdentifier id;
+  CipherSuiteId id;
   provider::ProviderPtr provider;
 };
 

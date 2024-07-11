@@ -22,10 +22,10 @@ using Counter = uint64_t;
 class SFrame
 {
 protected:
-  Cipher suite;
+  CipherSuiteImpl suite;
 
   SFrame(CipherSuite suite, provider::ProviderPtr provider);
-  SFrame(Cipher suite);
+  SFrame(CipherSuiteImpl suite);
   SFrame(SFrame&& other) noexcept;
   SFrame& operator=(SFrame&& other) noexcept;
 
@@ -33,7 +33,7 @@ protected:
 
   struct KeyState
   {
-    static KeyState from_base_key(const Cipher& suite, const bytes& base_key);
+    static KeyState from_base_key(const CipherSuiteImpl& suite, const bytes& base_key);
 
     bytes key;
     bytes salt;
@@ -58,7 +58,7 @@ public:
           = nullptr
 #endif
   );
-  Context(Cipher suite);
+  Context(CipherSuiteImpl suite);
 
   void add_key(KeyID kid, const bytes& key);
 
@@ -89,7 +89,7 @@ public:
 #endif
   );
 
-  MLSContext(Cipher suite, size_t epoch_bits_in);
+  MLSContext(CipherSuiteImpl suite, size_t epoch_bits_in);
 
   void add_epoch(EpochID epoch_id, const bytes& sframe_epoch_secret);
   void add_epoch(EpochID epoch_id,
@@ -123,7 +123,7 @@ private:
     EpochKeys(EpochID full_epoch_in,
               bytes sframe_epoch_secret_in,
               size_t sender_bits_in);
-    KeyState& get(const Cipher& suite, SenderID sender_id);
+    KeyState& get(const CipherSuiteImpl& suite, SenderID sender_id);
   };
 
   std::vector<std::unique_ptr<EpochKeys>> epoch_cache;

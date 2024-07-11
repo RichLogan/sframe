@@ -41,7 +41,7 @@ struct invalid_parameter_error : std::runtime_error
 using bytes = std::vector<std::uint8_t>;
 using input_bytes = gsl::span<const std::uint8_t>;
 using output_bytes = gsl::span<std::uint8_t>;
-using CipherSuiteIdentifier = std::uint16_t;
+using CipherSuiteId = std::uint16_t;
 
 namespace provider {
 
@@ -52,19 +52,19 @@ struct Provider
   ///
   /// Information about algorithms
   ///
-  virtual std::set<CipherSuiteIdentifier> supported_ciphersuites() const = 0;
+  virtual std::set<CipherSuiteId> supported_ciphersuites() const = 0;
   virtual std::size_t cipher_digest_size(
-    CipherSuiteIdentifier cipher) const = 0;
-  virtual std::size_t cipher_key_size(CipherSuiteIdentifier cipher) const = 0;
-  virtual std::size_t cipher_nonce_size(CipherSuiteIdentifier cipher) const = 0;
+    CipherSuiteId cipher) const = 0;
+  virtual std::size_t cipher_key_size(CipherSuiteId cipher) const = 0;
+  virtual std::size_t cipher_nonce_size(CipherSuiteId cipher) const = 0;
 
   ///
   /// HMAC and HKDF
   ///
-  virtual bytes hkdf_extract(CipherSuiteIdentifier cipher,
+  virtual bytes hkdf_extract(CipherSuiteId cipher,
                              const bytes& salt,
                              const bytes& ikm) const = 0;
-  virtual bytes hkdf_expand(CipherSuiteIdentifier cipher,
+  virtual bytes hkdf_expand(CipherSuiteId cipher,
                             const bytes& secret,
                             const bytes& info,
                             std::size_t size) const = 0;
@@ -72,13 +72,13 @@ struct Provider
   ///
   /// AEAD Algorithms
   ///
-  virtual output_bytes seal(CipherSuiteIdentifier cipher,
+  virtual output_bytes seal(CipherSuiteId cipher,
                             const bytes& key,
                             const bytes& nonce,
                             output_bytes ct,
                             input_bytes aad,
                             input_bytes pt) const = 0;
-  virtual output_bytes open(CipherSuiteIdentifier cipher,
+  virtual output_bytes open(CipherSuiteId cipher,
                             const bytes& key,
                             const bytes& nonce,
                             output_bytes pt,
