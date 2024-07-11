@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <openssl/hmac.h>
 #include <provider.h>
@@ -8,6 +9,16 @@
 namespace sframe {
 namespace provider {
 namespace openssl {
+
+using CipherSuite = std::uint16_t;
+const CipherSuite AES_CM_128_HMAC_SHA256_4 = 1;
+const CipherSuite AES_CM_128_HMAC_SHA256_8 = 2;
+const CipherSuite AES_GCM_128_SHA256 = 3;
+const CipherSuite AES_GCM_256_SHA512 = 4;
+const CipherSuite supported_ciphers[4] = { AES_CM_128_HMAC_SHA256_4,
+                                           AES_CM_128_HMAC_SHA256_8,
+                                           AES_GCM_128_SHA256,
+                                           AES_GCM_256_SHA512 };
 
 struct openssl_error : std::runtime_error
 {
@@ -18,35 +29,36 @@ using scoped_hmac_ctx = std::unique_ptr<HMAC_CTX, decltype(&HMAC_CTX_free)>;
 
 struct OpenSSLProvider : Provider
 {
-  // Create an OpenSSL provider for the given cipher suite.
-  OpenSSLProvider(CipherSuite suite);
-
   ///
   /// Information about algorithms
   ///
-  std::size_t cipher_digest_size() const override;
-  std::size_t cipher_key_size() const override;
-  std::size_t cipher_nonce_size() const override;
+  std::set<CipherSuite> supported_ciphersuites() const override;
+  std::size_t cipher_digest_size(CipherSuite cipher) const override;
+  std::size_t cipher_key_size(CipherSuite cipher) const override;
+  std::size_t cipher_nonce_size(CipherSuite cipher) const override;
 
   ///
   /// HMAC and HKDF
   ///
-  bytes hkdf_extract(const bytes& salt,
+  bytes hkdf_extract(CipherSuite cipher,
+                     const bytes& salt,
                      const bytes& ikm) const override;
-  bytes hkdf_expand(const bytes& secret,
+  bytes hkdf_expand(CipherSuite cipher,
+                    const bytes& secret,
                     const bytes& info,
                     std::size_t size) const override;
-  bool is_ctr_hmac() const override;
 
   ///
   /// AEAD Algorithms
   ///
-  output_bytes seal(const bytes& key,
+  output_bytes seal(CipherSuite cipher,
+                    const bytes& key,
                     const bytes& nonce,
                     output_bytes ct,
                     input_bytes aad,
                     input_bytes pt) const override;
-  output_bytes open(const bytes& key,
+  output_bytes open(CipherSuite cipher,
+                    const bytes& key,
                     const bytes& nonce,
                     output_bytes pt,
                     input_bytes aad,
@@ -63,20 +75,21 @@ private:
     std::array<std::uint8_t, EVP_MAX_MD_SIZE> md;
   };
 
-  bytes hmac_for_hkdf(input_bytes key, input_bytes data) const;
-  output_bytes seal_ctr(const bytes& key,
+  bytes hmac_for_hkdf(CipherSuite cipher,
+                      input_bytes key,
+                      input_bytes data) const;
+  output_bytes seal_ctr(CipherSuite cipher,
+                        const bytes& key,
                         const bytes& nonce,
                         output_bytes ct,
                         input_bytes aad,
                         input_bytes pt) const;
-  output_bytes open_ctr(const bytes& key,
+  output_bytes open_ctr(CipherSuite cipher,
+                        const bytes& key,
                         const bytes& nonce,
                         output_bytes pt,
                         input_bytes aad,
                         input_bytes ct) const;
-
-protected:
-  const CipherSuite suite;
 };
 }
 }

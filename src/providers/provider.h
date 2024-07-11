@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <gsl/gsl-lite.hpp>
+#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -40,16 +41,9 @@ struct invalid_parameter_error : std::runtime_error
 using bytes = std::vector<std::uint8_t>;
 using input_bytes = gsl::span<const std::uint8_t>;
 using output_bytes = gsl::span<std::uint8_t>;
+using CipherSuiteIdentifier = std::uint16_t;
 
 namespace provider {
-
-enum class CipherSuite : std::uint16_t
-{
-  AES_CM_128_HMAC_SHA256_4 = 1,
-  AES_CM_128_HMAC_SHA256_8 = 2,
-  AES_GCM_128_SHA256 = 3,
-  AES_GCM_256_SHA512 = 4,
-};
 
 struct Provider
 {
@@ -58,29 +52,34 @@ struct Provider
   ///
   /// Information about algorithms
   ///
-  virtual std::size_t cipher_digest_size() const = 0;
-  virtual std::size_t cipher_key_size() const = 0;
-  virtual std::size_t cipher_nonce_size() const = 0;
+  virtual std::set<CipherSuiteIdentifier> supported_ciphersuites() const = 0;
+  virtual std::size_t cipher_digest_size(
+    CipherSuiteIdentifier cipher) const = 0;
+  virtual std::size_t cipher_key_size(CipherSuiteIdentifier cipher) const = 0;
+  virtual std::size_t cipher_nonce_size(CipherSuiteIdentifier cipher) const = 0;
 
   ///
   /// HMAC and HKDF
   ///
-  virtual bytes hkdf_extract(const bytes& salt,
+  virtual bytes hkdf_extract(CipherSuiteIdentifier cipher,
+                             const bytes& salt,
                              const bytes& ikm) const = 0;
-  virtual bytes hkdf_expand(const bytes& secret,
+  virtual bytes hkdf_expand(CipherSuiteIdentifier cipher,
+                            const bytes& secret,
                             const bytes& info,
                             std::size_t size) const = 0;
-  virtual bool is_ctr_hmac() const = 0;
 
   ///
   /// AEAD Algorithms
   ///
-  virtual output_bytes seal(const bytes& key,
+  virtual output_bytes seal(CipherSuiteIdentifier cipher,
+                            const bytes& key,
                             const bytes& nonce,
                             output_bytes ct,
                             input_bytes aad,
                             input_bytes pt) const = 0;
-  virtual output_bytes open(const bytes& key,
+  virtual output_bytes open(CipherSuiteIdentifier cipher,
+                            const bytes& key,
                             const bytes& nonce,
                             output_bytes pt,
                             input_bytes aad,

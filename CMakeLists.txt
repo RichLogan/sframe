@@ -83,7 +83,13 @@ target_include_directories( gsl INTERFACE ${GSL_LITE_INCLUDE_DIR} )
 set(LIB_NAME "${PROJECT_NAME}")
 add_subdirectory(src/providers)
 
-add_library(${LIB_NAME} src/header.h src/header.cpp src/sframe.cpp)
+add_library(${LIB_NAME}
+  src/header.h
+  src/header.cpp
+  include/sframe/sframe.h
+  src/sframe.cpp
+  include/sframe/cipher.h
+  src/cipher.cpp)
 add_dependencies(${LIB_NAME} gsl)
 target_link_libraries(${LIB_NAME}
   PRIVATE

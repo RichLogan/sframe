@@ -5,12 +5,11 @@
 #include <memory>
 #include <vector>
 #include <provider.h>
+#include <sframe/cipher.h>
 
 #include <gsl/gsl-lite.hpp>
 
 namespace sframe {
-
-using CipherSuite = sframe::provider::CipherSuite;
 
 constexpr size_t max_overhead = 17 + 16;
 
@@ -23,13 +22,13 @@ using Counter = uint64_t;
 class SFrame
 {
 protected:
-  provider::ProviderPtr provider;
+  Cipher suite;
 
   #if defined(BUILTIN_PROVIDER)
   // [[deprecated]]
   SFrame(CipherSuite suite_in);
   #endif
-  SFrame(provider::ProviderPtr provider);
+  SFrame(Cipher suite);
   SFrame(SFrame&& other) noexcept;
   SFrame& operator=(SFrame&& other) noexcept;
   SFrame(const SFrame&) = delete;
@@ -39,7 +38,7 @@ protected:
 
   struct KeyState
   {
-    static KeyState from_base_key(const bytes& base_key, const provider::Provider& provider);
+    static KeyState from_base_key(const bytes& base_key, const Cipher& cipher);
 
     bytes key;
     bytes salt;
@@ -61,7 +60,7 @@ public:
   // [[deprecated]]
   Context(CipherSuite suite);
 #endif
-  Context(provider::ProviderPtr provider);
+  Context(Cipher cipher);
 
   void add_key(KeyID kid, const bytes& key);
 
@@ -87,7 +86,7 @@ public:
   // [[deprecated]]
   MLSContext(CipherSuite suite_in, size_t epoch_bits_in);
 #endif
-  MLSContext(provider::ProviderPtr provider, size_t epoch_bits_in);
+  MLSContext(Cipher cipher, size_t epoch_bits_in);
 
   void add_epoch(EpochID epoch_id, const bytes& sframe_epoch_secret);
   void add_epoch(EpochID epoch_id,
@@ -121,7 +120,7 @@ private:
     EpochKeys(EpochID full_epoch_in,
               bytes sframe_epoch_secret_in,
               size_t sender_bits_in);
-    KeyState& get(SenderID sender_id, const provider::Provider& provider);
+    KeyState& get(SenderID sender_id, const Cipher& cipher);
   };
 
   std::vector<std::unique_ptr<EpochKeys>> epoch_cache;
