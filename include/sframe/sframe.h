@@ -24,15 +24,10 @@ class SFrame
 protected:
   Cipher suite;
 
-  #if defined(BUILTIN_PROVIDER)
-  // [[deprecated]]
-  SFrame(CipherSuite suite_in);
-  #endif
+  SFrame(CipherSuite suite_in, provider::ProviderPtr provider);
   SFrame(Cipher suite);
   SFrame(SFrame&& other) noexcept;
   SFrame& operator=(SFrame&& other) noexcept;
-  SFrame(const SFrame&) = delete;
-  SFrame& operator=(const SFrame&) = delete;
 
   virtual ~SFrame();
 
@@ -56,10 +51,13 @@ protected:
 class Context : public SFrame
 {
 public:
+  Context(CipherSuite suite_in,
+         provider::ProviderPtr provider
 #if defined(BUILTIN_PROVIDER)
-  // [[deprecated]]
-  Context(CipherSuite suite);
+        // Defaults for backwards API compatability.
+         = nullptr
 #endif
+  );
   Context(Cipher cipher);
 
   void add_key(KeyID kid, const bytes& key);
@@ -82,10 +80,15 @@ public:
   using SenderID = uint64_t;
   using ContextID = uint64_t;
 
+  MLSContext(CipherSuite suite_in,
+             size_t epoch_bits_in,
+             provider::ProviderPtr provider
 #if defined(BUILTIN_PROVIDER)
-  // [[deprecated]]
-  MLSContext(CipherSuite suite_in, size_t epoch_bits_in);
+             // Defaults for backwards API compatability.
+             = nullptr
 #endif
+  );
+
   MLSContext(Cipher cipher, size_t epoch_bits_in);
 
   void add_epoch(EpochID epoch_id, const bytes& sframe_epoch_secret);

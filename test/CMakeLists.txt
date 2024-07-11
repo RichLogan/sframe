@@ -2,6 +2,7 @@ set(TEST_APP_NAME "${LIB_NAME}_test")
 
 # Dependencies
 find_package(doctest REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # Test Binary
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)

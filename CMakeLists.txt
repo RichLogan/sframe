@@ -49,9 +49,6 @@ endif()
 ### Dependencies
 ###
 
-# External libraries
-find_package(OpenSSL 1.1 REQUIRED)
-
 # gsl-lite fetched from GitHub
 include( ExternalProject )
 find_package( Git REQUIRED )

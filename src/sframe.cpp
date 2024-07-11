@@ -29,11 +29,9 @@ operator<<(std::ostream& str, const input_bytes data)
 /// Context
 ///
 
-#if defined(BUILTIN_PROVIDER)
-Context::Context(CipherSuite suite_in)
-  : SFrame(suite_in)
+Context::Context(CipherSuite suite_in, provider::ProviderPtr provider)
+  : SFrame(suite_in, std::move(provider))
 {}
-#endif
 
 Context::Context(Cipher cipher)
   : SFrame(std::move(cipher))
@@ -97,13 +95,21 @@ form_nonce(Counter ctr, const bytes& salt)
   return nonce;
 }
 
-#if defined(BUILTIN_PROVIDER)
-// Maintaining backwards compatibility with the previous OpenSSL only implementation.
-SFrame::SFrame(CipherSuite suite_in)
- : suite(Cipher(suite_in, std::unique_ptr<provider::openssl::OpenSSLProvider>(new provider::openssl::OpenSSLProvider())))
+static provider::ProviderPtr validate(provider::ProviderPtr provider)
 {
-}
+  if (provider != nullptr)
+  {
+    return provider;
+  }
+#if defined(BUILTIN_PROVIDER)
+    return std::unique_ptr<provider::openssl::OpenSSLProvider>(new provider::openssl::OpenSSLProvider());
 #endif
+  throw std::invalid_argument("Provider must not be null");
+}
+
+SFrame::SFrame(CipherSuite suite_in, provider::ProviderPtr provider)
+: suite(Cipher(suite_in, validate(std::move(provider))))
+{}
 
 SFrame::SFrame(Cipher suite)
   : suite(std::move(suite))
@@ -178,9 +184,8 @@ Context::get_state(KeyID key_id)
 /// MLSContext
 ///
 
-#if defined(BUILTIN_PROVIDER)
-MLSContext::MLSContext(CipherSuite suite_in, size_t epoch_bits_in)
-  : SFrame(suite_in)
+MLSContext::MLSContext(CipherSuite suite_in, size_t epoch_bits_in, provider::ProviderPtr provider)
+  : SFrame(suite_in, std::move(provider))
   , epoch_bits(epoch_bits_in)
   , epoch_mask((size_t(1) << epoch_bits_in) - 1)
   , epoch_cache(size_t(1) << epoch_bits_in)
@@ -189,7 +194,6 @@ MLSContext::MLSContext(CipherSuite suite_in, size_t epoch_bits_in)
                 epoch_cache.end(),
                 [&](std::unique_ptr<EpochKeys>& ptr) { ptr.reset(nullptr); });
 }
-#endif
 
 MLSContext::MLSContext(Cipher cipher, size_t epoch_bits_in)
   : SFrame(std::move(cipher))
