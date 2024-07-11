@@ -3,9 +3,9 @@
 #include <iosfwd>
 #include <map>
 #include <memory>
-#include <vector>
 #include <provider.h>
 #include <sframe/cipher.h>
+#include <vector>
 
 #include <gsl/gsl-lite.hpp>
 
@@ -52,10 +52,10 @@ class Context : public SFrame
 {
 public:
   Context(CipherSuite suite,
-         provider::ProviderPtr provider
+          provider::ProviderPtr provider
 #if defined(BUILTIN_PROVIDER)
-        // Defaults for backwards API compatability.
-         = nullptr
+          // Defaults for backwards API compatability.
+          = nullptr
 #endif
   );
   Context(Cipher suite);

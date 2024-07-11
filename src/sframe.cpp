@@ -1,7 +1,7 @@
 #include <sframe/sframe.h>
 
-#include "provider.h"
 #include "header.h"
+#include "provider.h"
 #if defined(BUILTIN_PROVIDER)
 #include "openssl.h"
 #endif
@@ -95,20 +95,21 @@ form_nonce(Counter ctr, const bytes& salt)
   return nonce;
 }
 
-static provider::ProviderPtr validate(provider::ProviderPtr provider)
+static provider::ProviderPtr
+validate(provider::ProviderPtr provider)
 {
-  if (provider != nullptr)
-  {
+  if (provider != nullptr) {
     return provider;
   }
 #if defined(BUILTIN_PROVIDER)
-    return std::unique_ptr<provider::openssl::OpenSSLProvider>(new provider::openssl::OpenSSLProvider());
+  return std::unique_ptr<provider::openssl::OpenSSLProvider>(
+    new provider::openssl::OpenSSLProvider());
 #endif
   throw std::invalid_argument("Provider must not be null");
 }
 
 SFrame::SFrame(CipherSuite suite_in, provider::ProviderPtr provider)
-: suite(Cipher(suite_in, validate(std::move(provider))))
+  : suite(Cipher(suite_in, validate(std::move(provider))))
 {}
 
 SFrame::SFrame(Cipher suite)
@@ -117,9 +118,12 @@ SFrame::SFrame(Cipher suite)
 
 SFrame::SFrame(SFrame&& other) noexcept
   : suite(std::move(other.suite))
-{}
+{
+}
 
-SFrame& SFrame::operator=(SFrame&& other) noexcept {
+SFrame&
+SFrame::operator=(SFrame&& other) noexcept
+{
   suite = std::move(other.suite);
   return *this;
 }
@@ -184,7 +188,9 @@ Context::get_state(KeyID key_id)
 /// MLSContext
 ///
 
-MLSContext::MLSContext(CipherSuite suite_in, size_t epoch_bits_in, provider::ProviderPtr provider)
+MLSContext::MLSContext(CipherSuite suite_in,
+                       size_t epoch_bits_in,
+                       provider::ProviderPtr provider)
   : SFrame(suite_in, std::move(provider))
   , epoch_bits(epoch_bits_in)
   , epoch_mask((size_t(1) << epoch_bits_in) - 1)
