@@ -5,10 +5,18 @@
 
 namespace sframe {
 
-using CipherSuiteId = std::uint16_t;
+/// Represents an sframe cipher suite and its constituent algorithms as
+/// understood by a provider.
+struct CipherSuiteId
+{
+  std::uint16_t id;
+  AEADId aead_id;
+  HashId hash_id;
+  std::size_t tag_size;
+};
 
 // Built in cipher suite identifiers.
-enum class CipherSuite : CipherSuiteId
+enum class CipherSuite : std::uint16_t
 {
   AES_CM_128_HMAC_SHA256_4 = 1,
   AES_CM_128_HMAC_SHA256_8 = 2,

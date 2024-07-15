@@ -10,16 +10,6 @@ namespace sframe {
 namespace provider {
 namespace openssl {
 
-using CipherSuite = std::uint16_t;
-const CipherSuite AES_CM_128_HMAC_SHA256_4 = 1;
-const CipherSuite AES_CM_128_HMAC_SHA256_8 = 2;
-const CipherSuite AES_GCM_128_SHA256 = 3;
-const CipherSuite AES_GCM_256_SHA512 = 4;
-const CipherSuite supported_ciphers[4] = { AES_CM_128_HMAC_SHA256_4,
-                                           AES_CM_128_HMAC_SHA256_8,
-                                           AES_GCM_128_SHA256,
-                                           AES_GCM_256_SHA512 };
-
 struct openssl_error : std::runtime_error
 {
   openssl_error();
@@ -32,18 +22,19 @@ struct OpenSSLProvider : Provider
   ///
   /// Information about algorithms
   ///
-  std::set<CipherSuite> supported_ciphersuites() const override;
-  std::size_t cipher_digest_size(CipherSuite cipher) const override;
-  std::size_t cipher_key_size(CipherSuite cipher) const override;
-  std::size_t cipher_nonce_size(CipherSuite cipher) const override;
+  virtual std::set<HashId> supported_hash_algorithms() const override;
+  virtual std::set<AEADId> supported_aead_algorithms() const override;
+  std::size_t digest_size(HashId algorithm) const override;
+  std::size_t key_size(HashId algorithm) const override;
+  std::size_t nonce_size(AEADId algorithm) const override;
 
   ///
   /// HMAC and HKDF
   ///
-  bytes hkdf_extract(CipherSuite cipher,
+  bytes hkdf_extract(HashId algorithm,
                      const bytes& salt,
                      const bytes& ikm) const override;
-  bytes hkdf_expand(CipherSuite cipher,
+  bytes hkdf_expand(HashId algorithm,
                     const bytes& secret,
                     const bytes& info,
                     std::size_t size) const override;
@@ -51,13 +42,17 @@ struct OpenSSLProvider : Provider
   ///
   /// AEAD Algorithms
   ///
-  output_bytes seal(CipherSuite cipher,
+  output_bytes seal(AEADId aead_algorithm,
+                    HashId hash_algorithm,
+                    std::size_t tag_size,
                     const bytes& key,
                     const bytes& nonce,
                     output_bytes ct,
                     input_bytes aad,
                     input_bytes pt) const override;
-  output_bytes open(CipherSuite cipher,
+  output_bytes open(AEADId aeadAlgorithm,
+                    HashId hash_algorithm,
+                    std::size_t tag_size,
                     const bytes& key,
                     const bytes& nonce,
                     output_bytes pt,
@@ -65,16 +60,20 @@ struct OpenSSLProvider : Provider
                     input_bytes ct) const override;
 
 private:
-  bytes hmac_for_hkdf(CipherSuite cipher,
+  bytes hmac_for_hkdf(HashAlgorithm cipher,
                       input_bytes key,
                       input_bytes data) const;
-  output_bytes seal_ctr(CipherSuite cipher,
+  output_bytes seal_ctr(AEADAlgorithm aeadAlgorithm,
+                        HashAlgorithm hashAlgorithm,
+                        std::size_t tag_size,
                         const bytes& key,
                         const bytes& nonce,
                         output_bytes ct,
                         input_bytes aad,
                         input_bytes pt) const;
-  output_bytes open_ctr(CipherSuite cipher,
+  output_bytes open_ctr(AEADAlgorithm aead_algorithm,
+                        HashAlgorithm hash_algorithm,
+                        std::size_t tag_size,
                         const bytes& key,
                         const bytes& nonce,
                         output_bytes pt,
@@ -84,7 +83,7 @@ private:
 
 struct HMAC
 {
-  HMAC(CipherSuite suite, input_bytes key);
+  HMAC(HashAlgorithm algorithm, input_bytes key);
   void write(input_bytes data);
   input_bytes digest();
 

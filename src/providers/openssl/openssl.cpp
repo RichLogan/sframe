@@ -11,92 +11,77 @@ using scoped_evp_ctx =
 
 openssl_error::openssl_error()
   : std::runtime_error(ERR_error_string(ERR_get_error(), nullptr))
-{}
+{
+}
 
 static const EVP_MD*
-openssl_digest_type(CipherSuite suite)
+openssl_digest_type(HashAlgorithm algorithm)
 {
-  switch (suite) {
-    case AES_CM_128_HMAC_SHA256_4:
-    case AES_CM_128_HMAC_SHA256_8:
-    case AES_GCM_128_SHA256:
+  switch (algorithm) {
+    case HashAlgorithm::SHA256:
       return EVP_sha256();
-
-    case AES_GCM_256_SHA512:
+    case HashAlgorithm::SHA512:
       return EVP_sha512();
-
     default:
       throw unsupported_ciphersuite_error();
   }
 }
 
 static const EVP_CIPHER*
-openssl_cipher(CipherSuite suite)
+openssl_cipher(AEADAlgorithm algorithm)
 {
-  switch (suite) {
-    case AES_CM_128_HMAC_SHA256_4:
-    case AES_CM_128_HMAC_SHA256_8:
+  switch (algorithm) {
+    case AEADAlgorithm::AES_CM_128:
       return EVP_aes_128_ctr();
-
-    case AES_GCM_128_SHA256:
+    case AEADAlgorithm::AES_GCM_128:
       return EVP_aes_128_gcm();
-
-    case AES_GCM_256_SHA512:
+    case AEADAlgorithm::AES_GCM_256:
       return EVP_aes_256_gcm();
-
     default:
       throw unsupported_ciphersuite_error();
   }
 }
 
-static size_t
-openssl_tag_size(CipherSuite suite)
+static std::size_t
+openssl_digest_size(HashAlgorithm algorithm)
 {
-  switch (suite) {
-    case AES_CM_128_HMAC_SHA256_4:
-      return 4;
-
-    case AES_CM_128_HMAC_SHA256_8:
-      return 8;
-
-    case AES_GCM_128_SHA256:
-    case AES_GCM_256_SHA512:
-      return 16;
-
-    default:
-      throw unsupported_ciphersuite_error();
-  }
+  return EVP_MD_size(openssl_digest_type(algorithm));
 }
 
 ///
 /// Information about algorithms
 ///
 
-std::set<CipherSuite>
-OpenSSLProvider::supported_ciphersuites() const
+std::set<HashId>
+OpenSSLProvider::supported_hash_algorithms() const
 {
-  return { AES_CM_128_HMAC_SHA256_4,
-           AES_CM_128_HMAC_SHA256_8,
-           AES_GCM_128_SHA256,
-           AES_GCM_256_SHA512 };
+  return { static_cast<HashId>(HashAlgorithm::SHA256),
+           static_cast<HashId>(HashAlgorithm::SHA512) };
+}
+
+std::set<AEADId>
+OpenSSLProvider::supported_aead_algorithms() const
+{
+  return { static_cast<AEADId>(AEADAlgorithm::AES_CM_128),
+           static_cast<AEADId>(AEADAlgorithm::AES_GCM_128),
+           static_cast<AEADId>(AEADAlgorithm::AES_GCM_256) };
 }
 
 std::size_t
-OpenSSLProvider::cipher_digest_size(CipherSuite cipher) const
+OpenSSLProvider::digest_size(HashId algorithm) const
 {
-  return EVP_MD_size(openssl_digest_type(static_cast<CipherSuite>(cipher)));
+  return openssl_digest_size(static_cast<HashAlgorithm>(algorithm));
 }
 
-std::size_t
-OpenSSLProvider::cipher_key_size(CipherSuite suite) const
+static std::size_t
+openssl_key_size(AEADAlgorithm algorithm)
 {
-  switch (suite) {
-    case AES_CM_128_HMAC_SHA256_4:
-    case AES_CM_128_HMAC_SHA256_8:
-    case AES_GCM_128_SHA256:
+  switch (algorithm) {
+    case AEADAlgorithm::AES_CM_128:
+    case AEADAlgorithm::AES_GCM_128:
       return 16;
 
-    case AES_GCM_256_SHA512:
+    case AEADAlgorithm::AES_GCM_256:
       return 32;
 
     default:
@@ -105,13 +90,18 @@ OpenSSLProvider::cipher_key_size(CipherSuite suite) const
 }
 
 std::size_t
-OpenSSLProvider::cipher_nonce_size(CipherSuite suite) const
+OpenSSLProvider::key_size(AEADId algorithm) const
 {
-  switch (suite) {
-    case AES_CM_128_HMAC_SHA256_4:
-    case AES_CM_128_HMAC_SHA256_8:
-    case AES_GCM_128_SHA256:
-    case AES_GCM_256_SHA512:
+  return openssl_key_size(static_cast<AEADAlgorithm>(algorithm));
+}
+
+std::size_t
+OpenSSLProvider::nonce_size(AEADId algorithm) const
+{
+  switch (algorithm) {
+    case static_cast<AEADId>(AEADAlgorithm::AES_CM_128):
+    case static_cast<AEADId>(AEADAlgorithm::AES_GCM_128):
+    case static_cast<AEADId>(AEADAlgorithm::AES_GCM_256):
       return 12;
 
     default:
@@ -123,10 +113,10 @@ OpenSSLProvider::cipher_nonce_size(CipherSuite suite) const
 /// HMAC and HKDF
 ///
 
-HMAC::HMAC(CipherSuite suite, input_bytes key)
+HMAC::HMAC(HashAlgorithm algorithm, input_bytes key)
   : ctx(HMAC_CTX_new(), HMAC_CTX_free)
 {
-  auto type = openssl_digest_type(suite);
+  auto type = openssl_digest_type(algorithm);
   auto key_size = static_cast<int>(key.size());
   if (1 != HMAC_Init_ex(ctx.get(), key.data(), key_size, type, nullptr)) {
     throw openssl_error();
@@ -153,11 +143,11 @@ HMAC::digest()
 }
 
 bytes
-OpenSSLProvider::hmac_for_hkdf(CipherSuite suite,
+OpenSSLProvider::hmac_for_hkdf(HashAlgorithm algorithm,
                                input_bytes key,
                                input_bytes data) const
 {
-  const auto type = openssl_digest_type(suite);
+  const auto type = openssl_digest_type(algorithm);
   auto ctx = scoped_hmac_ctx(HMAC_CTX_new(), HMAC_CTX_free);
 
   // Some FIPS-enabled libraries are overly conservative in their interpretation
@@ -179,7 +169,7 @@ OpenSSLProvider::hmac_for_hkdf(CipherSuite suite,
     key_data = &non_null_zero_length_key;
   }
 
-  if (1 != HMAC_Init_ex(ctx.get(), key.data(), key_size, type, nullptr)) {
+  if (1 != HMAC_Init_ex(ctx.get(), key_data, key_size, type, nullptr)) {
     throw openssl_error();
   }
 
@@ -187,7 +177,7 @@ OpenSSLProvider::hmac_for_hkdf(CipherSuite suite,
     throw openssl_error();
   }
 
-  auto md = bytes(cipher_digest_size(suite));
+  auto md = bytes(openssl_digest_size(algorithm));
   unsigned int size = 0;
   if (1 != HMAC_Final(ctx.get(), md.data(), &size)) {
     throw openssl_error();
@@ -197,33 +187,34 @@ OpenSSLProvider::hmac_for_hkdf(CipherSuite suite,
 }
 
 bytes
-OpenSSLProvider::hkdf_extract(CipherSuite suite,
+OpenSSLProvider::hkdf_extract(HashId algorithm,
                               const bytes& salt,
                               const bytes& ikm) const
 {
-  return hmac_for_hkdf(suite, salt, ikm);
+  return hmac_for_hkdf(static_cast<HashAlgorithm>(algorithm), salt, ikm);
 }
 
 bytes
-OpenSSLProvider::hkdf_expand(CipherSuite suite,
+OpenSSLProvider::hkdf_expand(HashId algorithm,
                              const bytes& secret,
                              const bytes& info,
                              std::size_t size) const
 {
   // Ensure that we need only one hash invocation
-  if (size > cipher_digest_size(suite)) {
+  if (size > digest_size(algorithm)) {
     throw invalid_parameter_error("Size too big for hkdf_expand");
   }
 
   auto label = info;
   label.push_back(0x01);
-  auto mac = hmac_for_hkdf(suite, secret, label);
+  auto mac =
+    hmac_for_hkdf(static_cast<HashAlgorithm>(algorithm), secret, label);
   mac.resize(size);
   return mac;
 }
 
 static void
-ctr_crypt(CipherSuite suite,
+ctr_crypt(AEADAlgorithm algorithm,
           input_bytes key,
           input_bytes nonce,
           output_bytes out,
@@ -242,7 +233,7 @@ ctr_crypt(CipherSuite suite,
     std::array<uint8_t, 16>{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
   std::copy(nonce.begin(), nonce.end(), padded_nonce.begin());
 
-  auto cipher = openssl_cipher(suite);
+  auto cipher = openssl_cipher(algorithm);
   if (1 !=
       EVP_EncryptInit(ctx.get(), cipher, key.data(), padded_nonce.data())) {
     throw openssl_error();
@@ -261,30 +252,31 @@ ctr_crypt(CipherSuite suite,
 }
 
 output_bytes
-OpenSSLProvider::seal_ctr(CipherSuite suite,
+OpenSSLProvider::seal_ctr(AEADAlgorithm aead_algorithm,
+                          HashAlgorithm hash_algorithm,
+                          std::size_t tag_size,
                           const bytes& key,
                           const bytes& nonce,
                           output_bytes ct,
                           input_bytes aad,
                           input_bytes pt) const
 {
-  auto tag_size = openssl_tag_size(suite);
   if (ct.size() < pt.size() + tag_size) {
     throw buffer_too_small_error("Ciphertext buffer too small");
   }
 
   // Split the key into enc and auth subkeys
   auto key_span = input_bytes(key);
-  auto enc_key_size = cipher_key_size(suite);
+  auto enc_key_size = openssl_key_size(aead_algorithm);
   auto enc_key = key_span.subspan(0, enc_key_size);
   auto auth_key = key_span.subspan(enc_key_size);
 
   // Encrypt with AES-CM
   auto inner_ct = ct.subspan(0, pt.size());
-  ctr_crypt(suite, enc_key, nonce, inner_ct, pt);
+  ctr_crypt(aead_algorithm, enc_key, nonce, inner_ct, pt);
 
   // Authenticate with truncated HMAC
-  auto hmac = HMAC(suite, auth_key);
+  auto hmac = HMAC(hash_algorithm, auth_key);
   hmac.write(aad);
   hmac.write(inner_ct);
   auto mac = hmac.digest();
@@ -295,14 +287,14 @@ OpenSSLProvider::seal_ctr(CipherSuite suite,
 }
 
 static output_bytes
-seal_aead(CipherSuite suite,
+seal_aead(AEADAlgorithm algorithm,
+          std::size_t tag_size,
           const bytes& key,
           const bytes& nonce,
           output_bytes ct,
           input_bytes aad,
           input_bytes pt)
 {
-  auto tag_size = openssl_tag_size(suite);
   if (ct.size() < pt.size() + tag_size) {
     throw buffer_too_small_error("Ciphertext buffer too small");
   }
@@ -312,7 +304,7 @@ seal_aead(CipherSuite suite,
     throw openssl_error();
   }
 
-  auto cipher = openssl_cipher(suite);
+  auto cipher = openssl_cipher(algorithm);
   if (1 != EVP_EncryptInit(ctx.get(), cipher, key.data(), nonce.data())) {
     throw openssl_error();
   }
@@ -350,37 +342,45 @@ seal_aead(CipherSuite suite,
 }
 
 output_bytes
-OpenSSLProvider::seal(CipherSuite suite,
+OpenSSLProvider::seal(AEADId aead_algorithm,
+                      HashId hash_algorithm,
+                      std::size_t tag_size,
                       const bytes& key,
                       const bytes& nonce,
                       output_bytes ct,
                       input_bytes aad,
                       input_bytes pt) const
 {
-  switch (suite) {
-    case AES_CM_128_HMAC_SHA256_4:
-    case AES_CM_128_HMAC_SHA256_8: {
-      return seal_ctr(suite, key, nonce, ct, aad, pt);
-    }
-
-    case AES_GCM_128_SHA256:
-    case AES_GCM_256_SHA512: {
-      return seal_aead(suite, key, nonce, ct, aad, pt);
-    }
+  const auto typed_aead_algorithm = static_cast<AEADAlgorithm>(aead_algorithm);
+  const auto typed_hash_algorithm = static_cast<HashAlgorithm>(hash_algorithm);
+  switch (typed_aead_algorithm) {
+    case AEADAlgorithm::AES_CM_128:
+      return seal_ctr(typed_aead_algorithm,
+                      typed_hash_algorithm,
+                      tag_size,
+                      key,
+                      nonce,
+                      ct,
+                      aad,
+                      pt);
+    case AEADAlgorithm::AES_GCM_128:
+    case AEADAlgorithm::AES_GCM_256:
+      return seal_aead(typed_aead_algorithm, tag_size, key, nonce, ct, aad, pt);
+    default:
+      throw unsupported_ciphersuite_error();
   }
-
-  throw unsupported_ciphersuite_error();
 }
 
 output_bytes
-OpenSSLProvider::open_ctr(CipherSuite suite,
+OpenSSLProvider::open_ctr(AEADAlgorithm aead_algorithm,
+                          HashAlgorithm hash_algorithm,
+                          std::size_t tag_size,
                           const bytes& key,
                           const bytes& nonce,
                           output_bytes pt,
                           input_bytes aad,
                           input_bytes ct) const
 {
-  auto tag_size = openssl_tag_size(suite);
   if (ct.size() < tag_size) {
     throw buffer_too_small_error("Ciphertext buffer too small");
   }
@@ -391,12 +391,12 @@ OpenSSLProvider::open_ctr(CipherSuite suite,
 
   // Split the key into enc and auth subkeys
   auto key_span = input_bytes(key);
-  auto enc_key_size = cipher_key_size(suite);
+  auto enc_key_size = openssl_key_size(aead_algorithm);
   auto enc_key = key_span.subspan(0, enc_key_size);
   auto auth_key = key_span.subspan(enc_key_size);
 
   // Authenticate with truncated HMAC
-  auto hmac = HMAC(suite, auth_key);
+  auto hmac = HMAC(hash_algorithm, auth_key);
   hmac.write(aad);
   hmac.write(inner_ct);
   auto mac = hmac.digest();
@@ -405,20 +405,20 @@ OpenSSLProvider::open_ctr(CipherSuite suite,
   }
 
   // Decrypt with AES-CM
-  ctr_crypt(suite, enc_key, nonce, pt, ct.subspan(0, inner_ct_size));
+  ctr_crypt(aead_algorithm, enc_key, nonce, pt, ct.subspan(0, inner_ct_size));
 
   return pt.subspan(0, inner_ct_size);
 }
 
 static output_bytes
-open_aead(CipherSuite suite,
+open_aead(AEADAlgorithm algorithm,
+          std::size_t tag_size,
           const bytes& key,
           const bytes& nonce,
           output_bytes pt,
           input_bytes aad,
           input_bytes ct)
 {
-  auto tag_size = openssl_tag_size(suite);
   if (ct.size() < tag_size) {
     throw buffer_too_small_error("Ciphertext buffer too small");
   }
@@ -433,7 +433,7 @@ open_aead(CipherSuite suite,
     throw openssl_error();
   }
 
-  auto cipher = openssl_cipher(suite);
+  auto cipher = openssl_cipher(algorithm);
   if (1 != EVP_DecryptInit(ctx.get(), cipher, key.data(), nonce.data())) {
     throw openssl_error();
   }
@@ -471,25 +471,31 @@ open_aead(CipherSuite suite,
 }
 
 output_bytes
-OpenSSLProvider::open(CipherSuite suite,
+OpenSSLProvider::open(AEADId aead_algorithm,
+                      HashId hash_algorithm,
+                      std::size_t tag_size,
                       const bytes& key,
                       const bytes& nonce,
                       output_bytes pt,
                       input_bytes aad,
                       input_bytes ct) const
 {
-  switch (suite) {
-    case AES_CM_128_HMAC_SHA256_4:
-    case AES_CM_128_HMAC_SHA256_8: {
-      return open_ctr(suite, key, nonce, pt, aad, ct);
-    }
-
-    case AES_GCM_128_SHA256:
-    case AES_GCM_256_SHA512: {
-      return open_aead(suite, key, nonce, pt, aad, ct);
-    }
+  const auto typed_aead_algorithm = static_cast<AEADAlgorithm>(aead_algorithm);
+  const auto typed_hash_algorithm = static_cast<HashAlgorithm>(hash_algorithm);
+  switch (typed_aead_algorithm) {
+    case AEADAlgorithm::AES_CM_128:
+      return open_ctr(typed_aead_algorithm,
+                      typed_hash_algorithm,
+                      tag_size,
+                      key,
+                      nonce,
+                      pt,
+                      aad,
+                      ct);
+    case AEADAlgorithm::AES_GCM_128:
+    case AEADAlgorithm::AES_GCM_256:
+      return open_aead(typed_aead_algorithm, tag_size, key, nonce, pt, aad, ct);
   }
-
   throw unsupported_ciphersuite_error();
 }
 
