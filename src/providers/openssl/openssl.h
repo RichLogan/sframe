@@ -29,17 +29,6 @@ struct OpenSSLProvider : Provider
   std::size_t nonce_size(AEADId algorithm) const override;
 
   ///
-  /// HMAC and HKDF
-  ///
-  bytes hkdf_extract(HashId algorithm,
-                     const bytes& salt,
-                     const bytes& ikm) const override;
-  bytes hkdf_expand(HashId algorithm,
-                    const bytes& secret,
-                    const bytes& info,
-                    std::size_t size) const override;
-
-  ///
   /// AEAD Algorithms
   ///
   output_bytes seal(AEADId aead_algorithm,
@@ -59,10 +48,24 @@ struct OpenSSLProvider : Provider
                     input_bytes aad,
                     input_bytes ct) const override;
 
-private:
-  bytes hmac_for_hkdf(HashAlgorithm cipher,
+protected:
+  struct OpenSSLHMAC : HMAC
+  {
+    OpenSSLHMAC(HashAlgorithm algorithm, input_bytes key);
+    void check_fips(input_bytes key);
+    void write(input_bytes data) override;
+    bytes digest() override;
+
+    scoped_hmac_ctx ctx;
+    std::array<std::uint8_t, EVP_MAX_MD_SIZE> md;
+  };
+
+  Provider::HMACPtr create_hmac(HashId algorithm,
+                                input_bytes key) const override;
+  Provider::HMACPtr create_hmac(HashAlgorithm algorithm, input_bytes key) const;
+  bytes hmac_for_hkdf(HashId cipher,
                       input_bytes key,
-                      input_bytes data) const;
+                      input_bytes data) const override;
   output_bytes seal_ctr(AEADAlgorithm aeadAlgorithm,
                         HashAlgorithm hashAlgorithm,
                         std::size_t tag_size,
@@ -80,17 +83,6 @@ private:
                         input_bytes aad,
                         input_bytes ct) const;
 };
-
-struct HMAC
-{
-  HMAC(HashAlgorithm algorithm, input_bytes key);
-  void write(input_bytes data);
-  input_bytes digest();
-
-  scoped_hmac_ctx ctx;
-  std::array<std::uint8_t, EVP_MAX_MD_SIZE> md;
-};
-
 }
 }
 }

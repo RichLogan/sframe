@@ -113,7 +113,7 @@ OpenSSLProvider::nonce_size(AEADId algorithm) const
 /// HMAC and HKDF
 ///
 
-HMAC::HMAC(HashAlgorithm algorithm, input_bytes key)
+OpenSSLProvider::OpenSSLHMAC::OpenSSLHMAC(HashAlgorithm algorithm, input_bytes key)
   : ctx(HMAC_CTX_new(), HMAC_CTX_free)
 {
   auto type = openssl_digest_type(algorithm);
@@ -123,34 +123,8 @@ HMAC::HMAC(HashAlgorithm algorithm, input_bytes key)
   }
 }
 
-void
-HMAC::write(input_bytes data)
-{
-  if (1 != HMAC_Update(ctx.get(), data.data(), data.size())) {
-    throw openssl_error();
-  }
-}
-
-input_bytes
-HMAC::digest()
-{
-  unsigned int size = 0;
-  if (1 != HMAC_Final(ctx.get(), md.data(), &size)) {
-    throw openssl_error();
-  }
-
-  return input_bytes(md.data(), size);
-}
-
-bytes
-OpenSSLProvider::hmac_for_hkdf(HashAlgorithm algorithm,
-                               input_bytes key,
-                               input_bytes data) const
-{
-  const auto type = openssl_digest_type(algorithm);
-  auto ctx = scoped_hmac_ctx(HMAC_CTX_new(), HMAC_CTX_free);
-
-  // Some FIPS-enabled libraries are overly conservative in their interpretation
+void OpenSSLProvider::OpenSSLHMAC::check_fips(input_bytes key) {
+// Some FIPS-enabled libraries are overly conservative in their interpretation
   // of NIST SP 800-131A, which requires HMAC keys to be at least 112 bits long.
   // That document does not impose that requirement on HKDF, so we disable FIPS
   // enforcement for purposes of HKDF.
@@ -161,57 +135,26 @@ OpenSSLProvider::hmac_for_hkdf(HashAlgorithm algorithm,
   if (FIPS_mode() != 0 && key_size < fips_min_hmac_key_len) {
     HMAC_CTX_set_flags(ctx.get(), EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
   }
+}
 
-  // Guard against sending nullptr to HMAC_Init_ex
-  const auto* key_data = key.data();
-  const auto non_null_zero_length_key = uint8_t(0);
-  if (key_data == nullptr) {
-    key_data = &non_null_zero_length_key;
-  }
-
-  if (1 != HMAC_Init_ex(ctx.get(), key_data, key_size, type, nullptr)) {
-    throw openssl_error();
-  }
-
+void
+OpenSSLProvider::OpenSSLHMAC::write(input_bytes data)
+{
   if (1 != HMAC_Update(ctx.get(), data.data(), data.size())) {
     throw openssl_error();
   }
+}
 
-  auto md = bytes(openssl_digest_size(algorithm));
+bytes
+OpenSSLProvider::OpenSSLHMAC::digest()
+{
   unsigned int size = 0;
   if (1 != HMAC_Final(ctx.get(), md.data(), &size)) {
     throw openssl_error();
   }
-
-  return md;
+  return bytes(md.data(), md.data() + size);
 }
 
-bytes
-OpenSSLProvider::hkdf_extract(HashId algorithm,
-                              const bytes& salt,
-                              const bytes& ikm) const
-{
-  return hmac_for_hkdf(static_cast<HashAlgorithm>(algorithm), salt, ikm);
-}
-
-bytes
-OpenSSLProvider::hkdf_expand(HashId algorithm,
-                             const bytes& secret,
-                             const bytes& info,
-                             std::size_t size) const
-{
-  // Ensure that we need only one hash invocation
-  if (size > digest_size(algorithm)) {
-    throw invalid_parameter_error("Size too big for hkdf_expand");
-  }
-
-  auto label = info;
-  label.push_back(0x01);
-  auto mac =
-    hmac_for_hkdf(static_cast<HashAlgorithm>(algorithm), secret, label);
-  mac.resize(size);
-  return mac;
-}
 
 static void
 ctr_crypt(AEADAlgorithm algorithm,
@@ -276,10 +219,10 @@ OpenSSLProvider::seal_ctr(AEADAlgorithm aead_algorithm,
   ctr_crypt(aead_algorithm, enc_key, nonce, inner_ct, pt);
 
   // Authenticate with truncated HMAC
-  auto hmac = HMAC(hash_algorithm, auth_key);
-  hmac.write(aad);
-  hmac.write(inner_ct);
-  auto mac = hmac.digest();
+  auto hmac = create_hmac(hash_algorithm, auth_key);
+  hmac->write(aad);
+  hmac->write(inner_ct);
+  auto mac = hmac->digest();
   auto tag = ct.subspan(pt.size(), tag_size);
   std::copy(mac.begin(), mac.begin() + tag_size, tag.begin());
 
@@ -396,10 +339,10 @@ OpenSSLProvider::open_ctr(AEADAlgorithm aead_algorithm,
   auto auth_key = key_span.subspan(enc_key_size);
 
   // Authenticate with truncated HMAC
-  auto hmac = HMAC(hash_algorithm, auth_key);
-  hmac.write(aad);
-  hmac.write(inner_ct);
-  auto mac = hmac.digest();
+  auto hmac = create_hmac(hash_algorithm, auth_key);
+  hmac->write(aad);
+  hmac->write(inner_ct);
+  auto mac = hmac->digest();
   if (CRYPTO_memcmp(mac.data(), tag.data(), tag.size()) != 0) {
     throw authentication_error();
   }
@@ -497,6 +440,27 @@ OpenSSLProvider::open(AEADId aead_algorithm,
       return open_aead(typed_aead_algorithm, tag_size, key, nonce, pt, aad, ct);
   }
   throw unsupported_ciphersuite_error();
+}
+
+Provider::HMACPtr OpenSSLProvider::create_hmac(HashAlgorithm algorithm, input_bytes key) const {
+  return std::unique_ptr<OpenSSLHMAC>(new OpenSSLHMAC(algorithm, key));
+}
+
+bytes
+OpenSSLProvider::hmac_for_hkdf(HashId algorithm,
+                               input_bytes key,
+                               input_bytes data) const
+{
+  auto typed_algorithm = static_cast<HashAlgorithm>(algorithm);
+  auto hmac = OpenSSLProvider::OpenSSLHMAC(typed_algorithm, key);
+  hmac.check_fips(key);
+  hmac.write(data);
+  return hmac.digest();
+}
+
+Provider::HMACPtr OpenSSLProvider::create_hmac(HashId algorithm, input_bytes key) const {
+  const auto typed_algorithm = static_cast<HashAlgorithm>(algorithm);
+  return create_hmac(typed_algorithm, key);
 }
 
 }

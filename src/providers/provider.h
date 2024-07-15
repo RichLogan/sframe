@@ -61,7 +61,9 @@ enum class AEADAlgorithm : AEADId
   AES_GCM_256 = 3,
 };
 
-// Note to implementors: Although there is scope to use support arbitrary algorithms, a provider MUST honour the identifier mappings defined in HashAlgorithm and AEADAlgorithm.
+// Note to implementors: Although there is scope to use support arbitrary
+// algorithms, a provider MUST honour the identifier mappings defined in
+// HashAlgorithm and AEADAlgorithm.
 struct Provider
 {
   virtual ~Provider() = default;
@@ -80,11 +82,12 @@ struct Provider
   ///
   virtual bytes hkdf_extract(HashId algorithm,
                              const bytes& salt,
-                             const bytes& ikm) const = 0;
+                             const bytes& ikm) const;
+
   virtual bytes hkdf_expand(HashId algorithm,
                             const bytes& secret,
                             const bytes& info,
-                            std::size_t size) const = 0;
+                            std::size_t size) const;
 
   ///
   /// AEAD Algorithms
@@ -105,6 +108,20 @@ struct Provider
                             output_bytes pt,
                             input_bytes aad,
                             input_bytes ct) const = 0;
+
+protected:
+  struct HMAC
+  {
+    virtual ~HMAC() = default;
+    virtual void write(input_bytes data) = 0;
+    virtual bytes digest() = 0;
+  };
+  typedef std::unique_ptr<HMAC> HMACPtr;
+
+  virtual bytes hmac_for_hkdf(HashId algorithm,
+                              input_bytes key,
+                              input_bytes data) const;
+  virtual HMACPtr create_hmac(HashId algorithm, input_bytes key) const = 0;
 };
 
 typedef std::unique_ptr<Provider> ProviderPtr;
