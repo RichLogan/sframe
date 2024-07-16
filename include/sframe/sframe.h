@@ -3,8 +3,8 @@
 #include <iosfwd>
 #include <map>
 #include <memory>
-#include <provider.h>
 #include <sframe/cipher.h>
+#include <sframe/provider.h>
 #include <vector>
 
 #include <gsl/gsl-lite.hpp>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <provider.h>
+#include <sframe/provider.h>
 
 namespace sframe {
 

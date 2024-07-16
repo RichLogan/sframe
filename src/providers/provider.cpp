@@ -1,4 +1,4 @@
-#include <provider.h>
+#include <sframe/provider.h>
 
 namespace sframe {
 namespace provider {

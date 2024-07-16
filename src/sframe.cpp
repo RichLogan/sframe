@@ -1,7 +1,7 @@
 #include <sframe/sframe.h>
+#include <sframe/provider.h>
 
 #include "header.h"
-#include "provider.h"
 #if defined(BUILTIN_PROVIDER)
 #include "openssl.h"
 #endif
