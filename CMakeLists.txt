@@ -9,6 +9,7 @@ option(TESTING    "Build tests" OFF)
 option(CLANG_TIDY "Perform linting with clang-tidy" OFF)
 option(SANITIZERS "Enable sanitizers" OFF)
 option(BUILTIN_PROVIDER "Use the built-in OpenSSL crypto provider" ON)
+option(BUILD_OPENSSL "Build the OpenSSL crypto provider" ON)
 
 ###
 ### Global Config
@@ -78,6 +79,9 @@ target_include_directories( gsl INTERFACE ${GSL_LITE_INCLUDE_DIR} )
 ###
 
 set(LIB_NAME "${PROJECT_NAME}")
+if (BUILTIN_PROVIDER)
+  set(BUILD_OPENSSL ON)
+endif(BUILTIN_PROVIDER)
 add_subdirectory(src/providers)
 
 add_library(${LIB_NAME}
@@ -107,9 +111,6 @@ target_include_directories(${LIB_NAME}
 ### Tests
 ###
 if(TESTING)
-  if (NOT BUILTIN_PROVIDER)
-    message(FATAL_ERROR "Tests currently require the built-in provider to be enabled")
-  endif(NOT BUILTIN_PROVIDER)
   enable_testing()
   add_subdirectory(test)
 endif()

@@ -2,15 +2,15 @@ set(TEST_APP_NAME "${LIB_NAME}_test")
 
 # Dependencies
 find_package(doctest REQUIRED)
-find_package(OpenSSL REQUIRED)
-
-# Test Binary
-file(GLOB TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
-
-add_executable(${TEST_APP_NAME} ${TEST_SOURCES})
-add_dependencies(${TEST_APP_NAME} ${LIB_NAME} gsl)
-target_link_libraries(${TEST_APP_NAME} ${LIB_NAME} gsl doctest::doctest OpenSSL::Crypto ${LIB_NAME}_openssl)
-
-# Enable CTest
 include(doctest)
-doctest_discover_tests(${TEST_APP_NAME})
+
+# Test suite interface.
+add_library(${LIB_NAME}_test_suite INTERFACE sframe.h)
+target_link_libraries(${LIB_NAME}_test_suite INTERFACE ${LIB_NAME} doctest::doctest)
+
+# OpenSSL provider test.
+if (BUILD_OPENSSL)
+    add_executable(${TEST_APP_NAME}_openssl main.cpp sframe.h openssl.cpp)
+    target_link_libraries(${TEST_APP_NAME}_openssl ${LIB_NAME}_openssl ${LIB_NAME}_test_suite)
+    doctest_discover_tests(${TEST_APP_NAME}_openssl)
+endif(BUILD_OPENSSL)

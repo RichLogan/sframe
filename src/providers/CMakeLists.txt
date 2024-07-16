@@ -4,6 +4,6 @@ target_include_directories(${LIB_NAME}_provider PUBLIC ${CMAKE_CURRENT_SOURCE_DI
 target_link_libraries(${LIB_NAME}_provider PUBLIC gsl)
 
 # Builtin providers.
-if (BUILTIN_PROVIDER)
+if (BUILD_OPENSSL)
     add_subdirectory(openssl)
-endif(BUILTIN_PROVIDER)
+endif(BUILD_OPENSSL)
