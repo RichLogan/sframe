@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "sframe.h"
+#include "test_suite.h"
 #include "openssl.h"
 #include <openssl/crypto.h>
 

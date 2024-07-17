@@ -78,6 +78,7 @@ target_include_directories(gsl
     $<INSTALL_INTERFACE:include>
 )
 install(TARGETS gsl EXPORT ${PROJECT_NAME}-targets)
+install(DIRECTORY ${GSL_LITE_INCLUDE_DIR}/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 ###
 ### Library Config
@@ -101,17 +102,18 @@ target_link_libraries(${LIB_NAME}
   PRIVATE
     gsl
   PUBLIC
-    "${PROJECT_NAME}_provider")
+    ${LIB_NAME}_provider)
 if(BUILTIN_PROVIDER)
-  target_link_libraries(${LIB_NAME} PRIVATE "${PROJECT_NAME}_openssl")
+  target_link_libraries(${LIB_NAME} PRIVATE ${LIB_NAME}_openssl)
   target_compile_definitions(${LIB_NAME} PUBLIC -DBUILTIN_PROVIDER)
 endif(BUILTIN_PROVIDER)
 target_include_directories(${LIB_NAME}
   PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include/${PROJECT_NAME}-${PROJECT_VERSION}>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
 )
 install(TARGETS ${LIB_NAME} EXPORT ${PROJECT_NAME}-targets)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 ###
 ### Tests
@@ -157,16 +159,6 @@ install(
     ${PROJECT_NAME}Targets.cmake
   DESTINATION
     ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME})
-install(
-  DIRECTORY
-    include/
-  DESTINATION
-    ${CMAKE_INSTALL_INCLUDEDIR})
-install(
-  DIRECTORY
-    ${GSL_LITE_INCLUDE_DIR}/
-  DESTINATION
-    ${CMAKE_INSTALL_INCLUDEDIR})
 install(
   FILES
     ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
