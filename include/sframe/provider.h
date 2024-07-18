@@ -124,7 +124,7 @@ protected:
   virtual HMACPtr create_hmac(HashId algorithm, input_bytes key) const = 0;
 };
 
-typedef std::unique_ptr<Provider> ProviderPtr;
+typedef std::shared_ptr<Provider> ProviderPtr;
 
 } // namespace provider
 } // namespace sframe

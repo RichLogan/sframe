@@ -56,20 +56,6 @@ CipherSuiteImpl::CipherSuiteImpl(CipherSuiteId cipher_suite,
 {
 }
 
-CipherSuiteImpl::CipherSuiteImpl(CipherSuiteImpl&& other) noexcept
-  : id(other.id)
-  , provider(std::move(other.provider))
-{
-}
-
-CipherSuiteImpl&
-CipherSuiteImpl::operator=(CipherSuiteImpl&& other) noexcept
-{
-  id = other.id;
-  provider = std::move(other.provider);
-  return *this;
-}
-
 std::size_t
 CipherSuiteImpl::digest_size() const
 {

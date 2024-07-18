@@ -34,6 +34,8 @@ to_bytes(const T& range)
 
 TEST_CASE_TEMPLATE_DEFINE("SFrame Test Suite", T, test_suite)
 {
+  const auto provider = provider::ProviderPtr(new T());
+
   SUBCASE("SFrame Known-Answer")
   {
     struct KnownAnswerTest
@@ -97,8 +99,7 @@ TEST_CASE_TEMPLATE_DEFINE("SFrame Test Suite", T, test_suite)
       auto& suite = pair.first;
       auto& tc = pair.second;
 
-      auto provider = provider::ProviderPtr(new T());
-      auto ctx = Context(suite, std::move(provider));
+      auto ctx = Context(suite, provider);
       ctx.add_key(short_kid, tc.key);
       ctx.add_key(long_kid, tc.key);
 
@@ -155,12 +156,10 @@ TEST_CASE_TEMPLATE_DEFINE("SFrame Test Suite", T, test_suite)
       auto& suite = pair.first;
       auto& key = pair.second;
 
-      auto sendProvider = provider::ProviderPtr(new T());
-      auto send = Context(suite, std::move(sendProvider));
+      auto send = Context(suite, provider);
       send.add_key(kid, key);
 
-      auto recvProvider = provider::ProviderPtr(new T());
-      auto recv = Context(suite, std::move(recvProvider));
+      auto recv = Context(suite, provider);
       recv.add_key(kid, key);
 
       for (int i = 0; i < rounds; i++) {
@@ -278,8 +277,7 @@ TEST_CASE_TEMPLATE_DEFINE("SFrame Test Suite", T, test_suite)
       auto& suite = pair.first;
       auto& tc = pair.second;
 
-      auto provider = provider::ProviderPtr(new T());
-      auto ctx = MLSContext(suite, epoch_bits, std::move(provider));
+      auto ctx = MLSContext(suite, epoch_bits, provider);
 
       CHECK(tc.epochs.size() == epoch_ids.size());
       for (size_t i = 0; i < tc.epochs.size(); i++) {
@@ -319,10 +317,8 @@ TEST_CASE_TEMPLATE_DEFINE("SFrame Test Suite", T, test_suite)
     auto ct_out = bytes(plaintext.size() + max_overhead);
 
     for (auto& suite : suites) {
-      auto provider_a = provider::ProviderPtr(new T());
-      auto member_a = MLSContext(suite, epoch_bits, std::move(provider_a));
-      auto provider_b = provider::ProviderPtr(new T());
-      auto member_b = MLSContext(suite, epoch_bits, std::move(provider_b));
+      auto member_a = MLSContext(suite, epoch_bits, provider);
+      auto member_b = MLSContext(suite, epoch_bits, provider);
 
       for (MLSContext::EpochID epoch_id = 0; epoch_id < test_epochs;
            epoch_id++) {
@@ -607,8 +603,7 @@ TEST_CASE_TEMPLATE_DEFINE("SFrame Test Suite", T, test_suite)
       auto& suite = pair.first;
       auto& tc = pair.second;
 
-      auto provider = provider::ProviderPtr(new T());
-      auto ctx = MLSContext(suite, epoch_bits, std::move(provider));
+      auto ctx = MLSContext(suite, epoch_bits, provider);
 
       CHECK(tc.epochs.size() == epoch_ids.size());
       for (size_t i = 0; i < tc.epochs.size(); i++) {
@@ -655,12 +650,9 @@ TEST_CASE_TEMPLATE_DEFINE("SFrame Test Suite", T, test_suite)
     auto ct_out_0 = bytes(plaintext.size() + max_overhead);
 
     for (auto& suite : suites) {
-      auto provider_a_0 = provider::ProviderPtr(new T());
-      auto member_a_0 = MLSContext(suite, epoch_bits, std::move(provider_a_0));
-      auto provider_a_1 = provider::ProviderPtr(new T());
-      auto member_a_1 = MLSContext(suite, epoch_bits, std::move(provider_a_1));
-      auto provider_b = provider::ProviderPtr(new T());
-      auto member_b = MLSContext(suite, epoch_bits, std::move(provider_b));
+      auto member_a_0 = MLSContext(suite, epoch_bits, provider);
+      auto member_a_1 = MLSContext(suite, epoch_bits, provider);
+      auto member_b = MLSContext(suite, epoch_bits, provider);
 
       for (MLSContext::EpochID epoch_id = 0; epoch_id < test_epochs;
            epoch_id++) {
@@ -711,10 +703,8 @@ TEST_CASE_TEMPLATE_DEFINE("SFrame Test Suite", T, test_suite)
     auto pt_out = bytes(plaintext.size());
     auto ct_out = bytes(plaintext.size() + max_overhead);
 
-    auto provider_a = provider::ProviderPtr(new T());
-    auto member_a = MLSContext(suite, epoch_bits, std::move(provider_a));
-    auto provider_b = provider::ProviderPtr(new T());
-    auto member_b = MLSContext(suite, epoch_bits, std::move(provider_b));
+    auto member_a = MLSContext(suite, epoch_bits, provider);
+    auto member_b = MLSContext(suite, epoch_bits, provider);
 
     // Install epoch 1 and create a cipihertext
     const auto epoch_id_1 = MLSContext::EpochID(1);

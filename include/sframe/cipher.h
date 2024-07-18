@@ -30,11 +30,6 @@ public:
   CipherSuiteImpl(CipherSuite cipher_suite, provider::ProviderPtr provider);
   CipherSuiteImpl(CipherSuiteId cipher_suite, provider::ProviderPtr provider);
 
-  CipherSuiteImpl(CipherSuiteImpl&& other) noexcept;
-  CipherSuiteImpl& operator=(CipherSuiteImpl&& other) noexcept;
-  CipherSuiteImpl(const CipherSuiteImpl&) = delete;
-  CipherSuiteImpl& operator=(const CipherSuiteImpl&) = delete;
-
   ///
   /// Cipher properties
   ///

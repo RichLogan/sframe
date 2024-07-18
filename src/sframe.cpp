@@ -34,7 +34,7 @@ Context::Context(CipherSuite suite, provider::ProviderPtr provider)
 {}
 
 Context::Context(CipherSuiteImpl suite)
-  : SFrame(std::move(suite))
+  : SFrame(suite)
 {}
 
 static const bytes sframe_label{
@@ -113,20 +113,8 @@ SFrame::SFrame(CipherSuite suite_in, provider::ProviderPtr provider)
 {}
 
 SFrame::SFrame(CipherSuiteImpl suite)
-  : suite(std::move(suite))
+  : suite(suite)
 {}
-
-SFrame::SFrame(SFrame&& other) noexcept
-  : suite(std::move(other.suite))
-{
-}
-
-SFrame&
-SFrame::operator=(SFrame&& other) noexcept
-{
-  suite = std::move(other.suite);
-  return *this;
-}
 
 SFrame::~SFrame() = default;
 
@@ -202,7 +190,7 @@ MLSContext::MLSContext(CipherSuite suite_in,
 }
 
 MLSContext::MLSContext(CipherSuiteImpl suite, size_t epoch_bits_in)
-  : SFrame(std::move(suite))
+  : SFrame(suite)
   , epoch_bits(epoch_bits_in)
   , epoch_mask((size_t(1) << epoch_bits_in) - 1)
   , epoch_cache(size_t(1) << epoch_bits_in)

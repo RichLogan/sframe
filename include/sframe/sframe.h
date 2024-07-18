@@ -26,8 +26,6 @@ protected:
 
   SFrame(CipherSuite suite, provider::ProviderPtr provider);
   SFrame(CipherSuiteImpl suite);
-  SFrame(SFrame&& other) noexcept;
-  SFrame& operator=(SFrame&& other) noexcept;
 
   virtual ~SFrame();
 
