@@ -37,6 +37,7 @@ public:
   std::size_t key_size() const;
   std::size_t nonce_size() const;
   bool is_ctr_hmac() const;
+  std::size_t overhead() const;
 
   ///
   /// HMAC and HKDF

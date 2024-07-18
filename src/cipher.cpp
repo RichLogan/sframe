@@ -80,6 +80,11 @@ CipherSuiteImpl::is_ctr_hmac() const
   return id.aead_id == static_cast<AEADId>(provider::AEADAlgorithm::AES_CM_128);
 }
 
+std::size_t CipherSuiteImpl::overhead() const
+{
+  return id.tag_size;
+}
+
 ///
 /// HMAC and HKDF
 ///
