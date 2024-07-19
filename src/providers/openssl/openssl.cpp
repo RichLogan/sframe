@@ -1,4 +1,5 @@
 #include "openssl.h"
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 
@@ -123,8 +124,10 @@ OpenSSLProvider::OpenSSLHMAC::OpenSSLHMAC(HashAlgorithm algorithm, input_bytes k
   }
 }
 
+#if defined(__has_include)
+#if !__has_include(<openssl/is_boringssl.h>)
 void OpenSSLProvider::OpenSSLHMAC::check_fips(input_bytes key) {
-// Some FIPS-enabled libraries are overly conservative in their interpretation
+  // Some FIPS-enabled libraries are overly conservative in their interpretation
   // of NIST SP 800-131A, which requires HMAC keys to be at least 112 bits long.
   // That document does not impose that requirement on HKDF, so we disable FIPS
   // enforcement for purposes of HKDF.
@@ -136,6 +139,8 @@ void OpenSSLProvider::OpenSSLHMAC::check_fips(input_bytes key) {
     HMAC_CTX_set_flags(ctx.get(), EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
   }
 }
+#endif
+#endif
 
 void
 OpenSSLProvider::OpenSSLHMAC::write(input_bytes data)
@@ -453,7 +458,11 @@ OpenSSLProvider::hmac_for_hkdf(HashId algorithm,
 {
   auto typed_algorithm = static_cast<HashAlgorithm>(algorithm);
   auto hmac = OpenSSLProvider::OpenSSLHMAC(typed_algorithm, key);
+#if defined(__has_include)
+#if !__has_include(<openssl/is_boringssl.h>)
   hmac.check_fips(key);
+#endif
+#endif
   hmac.write(data);
   return hmac.digest();
 }
