@@ -5,24 +5,24 @@ namespace sframe {
 // Built in cipher suite internals.
 const CipherSuiteId AES_CM_128_HMAC_SHA256_4 = CipherSuiteId{
   static_cast<std::uint16_t>(CipherSuite::AES_CM_128_HMAC_SHA256_4),
-  static_cast<AEADId>(provider::AEADAlgorithm::AES_CM_128),
+  static_cast<EncryptionId>(provider::EncryptionAlgorithm::AES_CM_128),
   static_cast<HashId>(provider::HashAlgorithm::SHA256),
   4
 };
 const CipherSuiteId AES_CM_128_HMAC_SHA256_8 = CipherSuiteId{
   static_cast<std::uint16_t>(CipherSuite::AES_CM_128_HMAC_SHA256_8),
-  static_cast<AEADId>(provider::AEADAlgorithm::AES_CM_128),
+  static_cast<EncryptionId>(provider::EncryptionAlgorithm::AES_CM_128),
   static_cast<HashId>(provider::HashAlgorithm::SHA256),
   8
 };
 const CipherSuiteId AES_GCM_128_SHA256 =
   CipherSuiteId{ static_cast<std::uint16_t>(CipherSuite::AES_GCM_128_SHA256),
-                 static_cast<AEADId>(provider::AEADAlgorithm::AES_GCM_128),
+                 static_cast<EncryptionId>(provider::EncryptionAlgorithm::AES_GCM_128),
                  static_cast<HashId>(provider::HashAlgorithm::SHA256),
                  16 };
 const CipherSuiteId AES_GCM_256_SHA512 =
   CipherSuiteId{ static_cast<std::uint16_t>(CipherSuite::AES_GCM_256_SHA512),
-                 static_cast<AEADId>(provider::AEADAlgorithm::AES_GCM_256),
+                 static_cast<EncryptionId>(provider::EncryptionAlgorithm::AES_GCM_256),
                  static_cast<HashId>(provider::HashAlgorithm::SHA512),
                  16 };
 
@@ -65,19 +65,19 @@ CipherSuiteImpl::digest_size() const
 std::size_t
 CipherSuiteImpl::key_size() const
 {
-  return provider->key_size(id.aead_id);
+  return provider->key_size(id.encryption_id);
 }
 
 std::size_t
 CipherSuiteImpl::nonce_size() const
 {
-  return provider->nonce_size(id.aead_id);
+  return provider->nonce_size(id.encryption_id);
 }
 
 bool
 CipherSuiteImpl::is_ctr_hmac() const
 {
-  return id.aead_id == static_cast<AEADId>(provider::AEADAlgorithm::AES_CM_128);
+  return id.encryption_id == static_cast<EncryptionId>(provider::EncryptionAlgorithm::AES_CM_128);
 }
 
 ///
@@ -98,7 +98,7 @@ CipherSuiteImpl::hkdf_expand(const bytes& secret,
 }
 
 ///
-/// AEAD Algorithms
+/// Crypt Algorithms
 ///
 output_bytes
 CipherSuiteImpl::seal(const bytes& key,
@@ -108,7 +108,7 @@ CipherSuiteImpl::seal(const bytes& key,
                       input_bytes pt) const
 {
   return provider->seal(
-    id.aead_id, id.hash_id, id.tag_size, key, nonce, ct, aad, pt);
+    id.encryption_id, id.hash_id, id.tag_size, key, nonce, ct, aad, pt);
 }
 
 output_bytes
@@ -119,7 +119,7 @@ CipherSuiteImpl::open(const bytes& key,
                       input_bytes ct) const
 {
   return provider->open(
-    id.aead_id, id.hash_id, id.tag_size, key, nonce, pt, aad, ct);
+    id.encryption_id, id.hash_id, id.tag_size, key, nonce, pt, aad, ct);
 }
 
 } // namespace sframe

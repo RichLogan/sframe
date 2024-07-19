@@ -29,14 +29,14 @@ openssl_digest_type(HashAlgorithm algorithm)
 }
 
 static const EVP_CIPHER*
-openssl_cipher(AEADAlgorithm algorithm)
+openssl_cipher(EncryptionAlgorithm algorithm)
 {
   switch (algorithm) {
-    case AEADAlgorithm::AES_CM_128:
+    case EncryptionAlgorithm::AES_CM_128:
       return EVP_aes_128_ctr();
-    case AEADAlgorithm::AES_GCM_128:
+    case EncryptionAlgorithm::AES_GCM_128:
       return EVP_aes_128_gcm();
-    case AEADAlgorithm::AES_GCM_256:
+    case EncryptionAlgorithm::AES_GCM_256:
       return EVP_aes_256_gcm();
     default:
       throw unsupported_ciphersuite_error();
@@ -60,12 +60,12 @@ OpenSSLProvider::supported_hash_algorithms() const
            static_cast<HashId>(HashAlgorithm::SHA512) };
 }
 
-std::set<AEADId>
-OpenSSLProvider::supported_aead_algorithms() const
+std::set<EncryptionId>
+OpenSSLProvider::supported_encryption_algorithms() const
 {
-  return { static_cast<AEADId>(AEADAlgorithm::AES_CM_128),
-           static_cast<AEADId>(AEADAlgorithm::AES_GCM_128),
-           static_cast<AEADId>(AEADAlgorithm::AES_GCM_256) };
+  return { static_cast<EncryptionId>(EncryptionAlgorithm::AES_CM_128),
+           static_cast<EncryptionId>(EncryptionAlgorithm::AES_GCM_128),
+           static_cast<EncryptionId>(EncryptionAlgorithm::AES_GCM_256) };
 }
 
 std::size_t
@@ -75,14 +75,14 @@ OpenSSLProvider::digest_size(HashId algorithm) const
 }
 
 static std::size_t
-openssl_key_size(AEADAlgorithm algorithm)
+openssl_key_size(EncryptionAlgorithm algorithm)
 {
   switch (algorithm) {
-    case AEADAlgorithm::AES_CM_128:
-    case AEADAlgorithm::AES_GCM_128:
+    case EncryptionAlgorithm::AES_CM_128:
+    case EncryptionAlgorithm::AES_GCM_128:
       return 16;
 
-    case AEADAlgorithm::AES_GCM_256:
+    case EncryptionAlgorithm::AES_GCM_256:
       return 32;
 
     default:
@@ -91,18 +91,18 @@ openssl_key_size(AEADAlgorithm algorithm)
 }
 
 std::size_t
-OpenSSLProvider::key_size(AEADId algorithm) const
+OpenSSLProvider::key_size(EncryptionId algorithm) const
 {
-  return openssl_key_size(static_cast<AEADAlgorithm>(algorithm));
+  return openssl_key_size(static_cast<EncryptionAlgorithm>(algorithm));
 }
 
 std::size_t
-OpenSSLProvider::nonce_size(AEADId algorithm) const
+OpenSSLProvider::nonce_size(EncryptionId algorithm) const
 {
   switch (algorithm) {
-    case static_cast<AEADId>(AEADAlgorithm::AES_CM_128):
-    case static_cast<AEADId>(AEADAlgorithm::AES_GCM_128):
-    case static_cast<AEADId>(AEADAlgorithm::AES_GCM_256):
+    case static_cast<EncryptionId>(EncryptionAlgorithm::AES_CM_128):
+    case static_cast<EncryptionId>(EncryptionAlgorithm::AES_GCM_128):
+    case static_cast<EncryptionId>(EncryptionAlgorithm::AES_GCM_256):
       return 12;
 
     default:
@@ -162,7 +162,7 @@ OpenSSLProvider::OpenSSLHMAC::digest()
 
 
 static void
-ctr_crypt(AEADAlgorithm algorithm,
+ctr_crypt(EncryptionAlgorithm algorithm,
           input_bytes key,
           input_bytes nonce,
           output_bytes out,
@@ -200,7 +200,7 @@ ctr_crypt(AEADAlgorithm algorithm,
 }
 
 output_bytes
-OpenSSLProvider::seal_ctr(AEADAlgorithm aead_algorithm,
+OpenSSLProvider::seal_ctr(EncryptionAlgorithm encryption_algorithm,
                           HashAlgorithm hash_algorithm,
                           std::size_t tag_size,
                           const bytes& key,
@@ -215,13 +215,13 @@ OpenSSLProvider::seal_ctr(AEADAlgorithm aead_algorithm,
 
   // Split the key into enc and auth subkeys
   auto key_span = input_bytes(key);
-  auto enc_key_size = openssl_key_size(aead_algorithm);
+  auto enc_key_size = openssl_key_size(encryption_algorithm);
   auto enc_key = key_span.subspan(0, enc_key_size);
   auto auth_key = key_span.subspan(enc_key_size);
 
   // Encrypt with AES-CM
   auto inner_ct = ct.subspan(0, pt.size());
-  ctr_crypt(aead_algorithm, enc_key, nonce, inner_ct, pt);
+  ctr_crypt(encryption_algorithm, enc_key, nonce, inner_ct, pt);
 
   // Authenticate with truncated HMAC
   auto hmac = create_hmac(hash_algorithm, auth_key);
@@ -235,7 +235,7 @@ OpenSSLProvider::seal_ctr(AEADAlgorithm aead_algorithm,
 }
 
 static output_bytes
-seal_aead(AEADAlgorithm algorithm,
+seal_aead(EncryptionAlgorithm algorithm,
           std::size_t tag_size,
           const bytes& key,
           const bytes& nonce,
@@ -290,7 +290,7 @@ seal_aead(AEADAlgorithm algorithm,
 }
 
 output_bytes
-OpenSSLProvider::seal(AEADId aead_algorithm,
+OpenSSLProvider::seal(EncryptionId encryption_algorithm,
                       HashId hash_algorithm,
                       std::size_t tag_size,
                       const bytes& key,
@@ -299,11 +299,11 @@ OpenSSLProvider::seal(AEADId aead_algorithm,
                       input_bytes aad,
                       input_bytes pt) const
 {
-  const auto typed_aead_algorithm = static_cast<AEADAlgorithm>(aead_algorithm);
+  const auto typed_encryption_algorithm = static_cast<EncryptionAlgorithm>(encryption_algorithm);
   const auto typed_hash_algorithm = static_cast<HashAlgorithm>(hash_algorithm);
-  switch (typed_aead_algorithm) {
-    case AEADAlgorithm::AES_CM_128:
-      return seal_ctr(typed_aead_algorithm,
+  switch (typed_encryption_algorithm) {
+    case EncryptionAlgorithm::AES_CM_128:
+      return seal_ctr(typed_encryption_algorithm,
                       typed_hash_algorithm,
                       tag_size,
                       key,
@@ -311,16 +311,16 @@ OpenSSLProvider::seal(AEADId aead_algorithm,
                       ct,
                       aad,
                       pt);
-    case AEADAlgorithm::AES_GCM_128:
-    case AEADAlgorithm::AES_GCM_256:
-      return seal_aead(typed_aead_algorithm, tag_size, key, nonce, ct, aad, pt);
+    case EncryptionAlgorithm::AES_GCM_128:
+    case EncryptionAlgorithm::AES_GCM_256:
+      return seal_aead(typed_encryption_algorithm, tag_size, key, nonce, ct, aad, pt);
     default:
       throw unsupported_ciphersuite_error();
   }
 }
 
 output_bytes
-OpenSSLProvider::open_ctr(AEADAlgorithm aead_algorithm,
+OpenSSLProvider::open_ctr(EncryptionAlgorithm encryption_algorithm,
                           HashAlgorithm hash_algorithm,
                           std::size_t tag_size,
                           const bytes& key,
@@ -339,7 +339,7 @@ OpenSSLProvider::open_ctr(AEADAlgorithm aead_algorithm,
 
   // Split the key into enc and auth subkeys
   auto key_span = input_bytes(key);
-  auto enc_key_size = openssl_key_size(aead_algorithm);
+  auto enc_key_size = openssl_key_size(encryption_algorithm);
   auto enc_key = key_span.subspan(0, enc_key_size);
   auto auth_key = key_span.subspan(enc_key_size);
 
@@ -352,14 +352,14 @@ OpenSSLProvider::open_ctr(AEADAlgorithm aead_algorithm,
     throw authentication_error();
   }
 
-  // Decrypt with AES-CM
-  ctr_crypt(aead_algorithm, enc_key, nonce, pt, ct.subspan(0, inner_ct_size));
+  // Decrypt with CTR algorithm.
+  ctr_crypt(encryption_algorithm, enc_key, nonce, pt, ct.subspan(0, inner_ct_size));
 
   return pt.subspan(0, inner_ct_size);
 }
 
 static output_bytes
-open_aead(AEADAlgorithm algorithm,
+open_aead(EncryptionAlgorithm algorithm,
           std::size_t tag_size,
           const bytes& key,
           const bytes& nonce,
@@ -419,7 +419,7 @@ open_aead(AEADAlgorithm algorithm,
 }
 
 output_bytes
-OpenSSLProvider::open(AEADId aead_algorithm,
+OpenSSLProvider::open(EncryptionId encryption_algorithm,
                       HashId hash_algorithm,
                       std::size_t tag_size,
                       const bytes& key,
@@ -428,11 +428,11 @@ OpenSSLProvider::open(AEADId aead_algorithm,
                       input_bytes aad,
                       input_bytes ct) const
 {
-  const auto typed_aead_algorithm = static_cast<AEADAlgorithm>(aead_algorithm);
+  const auto typed_encryption_algorithm = static_cast<EncryptionAlgorithm>(encryption_algorithm);
   const auto typed_hash_algorithm = static_cast<HashAlgorithm>(hash_algorithm);
-  switch (typed_aead_algorithm) {
-    case AEADAlgorithm::AES_CM_128:
-      return open_ctr(typed_aead_algorithm,
+  switch (typed_encryption_algorithm) {
+    case EncryptionAlgorithm::AES_CM_128:
+      return open_ctr(typed_encryption_algorithm,
                       typed_hash_algorithm,
                       tag_size,
                       key,
@@ -440,9 +440,9 @@ OpenSSLProvider::open(AEADId aead_algorithm,
                       pt,
                       aad,
                       ct);
-    case AEADAlgorithm::AES_GCM_128:
-    case AEADAlgorithm::AES_GCM_256:
-      return open_aead(typed_aead_algorithm, tag_size, key, nonce, pt, aad, ct);
+    case EncryptionAlgorithm::AES_GCM_128:
+    case EncryptionAlgorithm::AES_GCM_256:
+      return open_aead(typed_encryption_algorithm, tag_size, key, nonce, pt, aad, ct);
   }
   throw unsupported_ciphersuite_error();
 }
