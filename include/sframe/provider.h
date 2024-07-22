@@ -21,7 +21,7 @@ struct unsupported_ciphersuite_error : std::runtime_error
 struct authentication_error : std::runtime_error
 {
   authentication_error()
-    : std::runtime_error("AEAD authentication failure")
+    : std::runtime_error("Authentication failure")
   {
   }
 };
@@ -42,7 +42,7 @@ using bytes = std::vector<std::uint8_t>;
 using input_bytes = gsl::span<const std::uint8_t>;
 using output_bytes = gsl::span<std::uint8_t>;
 using HashId = std::uint16_t;
-using AEADId = std::uint16_t;
+using EncryptionId = std::uint16_t;
 
 namespace provider {
 
@@ -53,8 +53,8 @@ enum class HashAlgorithm : HashId
   SHA512 = 2,
 };
 
-// Common AEAD algorithms.
-enum class AEADAlgorithm : AEADId
+// Common Encryption algorithms.
+enum class EncryptionAlgorithm : EncryptionId
 {
   AES_CM_128 = 1,
   AES_GCM_128 = 2,
@@ -63,7 +63,7 @@ enum class AEADAlgorithm : AEADId
 
 // Note to implementors: Although there is scope to use support arbitrary
 // algorithms, a provider MUST honour the identifier mappings defined in
-// HashAlgorithm and AEADAlgorithm.
+// HashAlgorithm and EncryptionAlgorithm.
 struct Provider
 {
   virtual ~Provider() = default;
@@ -72,10 +72,10 @@ struct Provider
   /// Information about algorithms
   ///
   virtual std::set<HashId> supported_hash_algorithms() const = 0;
-  virtual std::set<AEADId> supported_aead_algorithms() const = 0;
+  virtual std::set<EncryptionId> supported_encryption_algorithms() const = 0;
   virtual std::size_t digest_size(HashId algorithm) const = 0;
-  virtual std::size_t key_size(AEADId algorithm) const = 0;
-  virtual std::size_t nonce_size(AEADId algorithm) const = 0;
+  virtual std::size_t key_size(EncryptionId algorithm) const = 0;
+  virtual std::size_t nonce_size(EncryptionId algorithm) const = 0;
 
   ///
   /// HMAC and HKDF
@@ -90,9 +90,9 @@ struct Provider
                             std::size_t size) const;
 
   ///
-  /// AEAD Algorithms
+  /// Crypt Algorithms
   ///
-  virtual output_bytes seal(AEADId aead_algorithm,
+  virtual output_bytes seal(EncryptionId encryption_algorithm,
                             HashId hash_algorithm,
                             std::size_t tag_size,
                             const bytes& key,
@@ -100,7 +100,7 @@ struct Provider
                             output_bytes ct,
                             input_bytes aad,
                             input_bytes pt) const = 0;
-  virtual output_bytes open(AEADId aead_algorithm,
+  virtual output_bytes open(EncryptionId encryption_algorithm,
                             HashId hash_algorithm,
                             std::size_t tag_size,
                             const bytes& key,

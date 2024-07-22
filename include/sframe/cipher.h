@@ -10,7 +10,7 @@ namespace sframe {
 struct CipherSuiteId
 {
   std::uint16_t id;
-  AEADId aead_id;
+  EncryptionId encryption_id;
   HashId hash_id;
   std::size_t tag_size;
 };
@@ -48,7 +48,7 @@ public:
                     std::size_t size) const;
 
   ///
-  /// AEAD Algorithms
+  /// Crypt Algorithms
   ///
   output_bytes seal(const bytes& key,
                     const bytes& nonce,
